@@ -224,6 +224,9 @@ window.addEventListener('message', function(event) {
             if (typeof renderDashboard === 'function') renderDashboard();
             if (typeof renderPartyList === 'function') renderPartyList();
             
+            // 从 ERA 更新坐标显示
+            if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
+            
             // 转发 ERA 数据到 map iframe
             forwardEraToMap(event.data);
         }
@@ -235,6 +238,9 @@ window.addEventListener('message', function(event) {
             // 刷新界面
             if (typeof renderDashboard === 'function') renderDashboard();
             if (typeof renderPartyList === 'function') renderPartyList();
+            
+            // 从 ERA 更新坐标显示
+            if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
             
             // 转发 ERA 数据到 map iframe
             forwardEraToMap(event.data);
@@ -323,8 +329,30 @@ function initApp() {
             renderSettings();
             renderBoxPage();
             updateClock();
+            
+            // 从 ERA 更新坐标显示
+            updateCoordsFromEra();
         }
     });
+    
+    // 初始化时从 ERA 读取坐标
+    updateCoordsFromEra();
+}
+
+// 从 ERA 数据更新坐标显示
+function updateCoordsFromEra() {
+    if (db && db.world_state && db.world_state.location) {
+        const loc = db.world_state.location;
+        if (typeof loc.x === 'number' && typeof loc.y === 'number') {
+            currentMapCoords = {
+                x: loc.x,
+                y: loc.y,
+                quadrant: loc.quadrant || 'Z'
+            };
+            updateCoordsDisplay(currentMapCoords);
+            console.log('[PKM] 从 ERA 更新坐标:', currentMapCoords);
+        }
+    }
 }
 
 /* ============================================================
