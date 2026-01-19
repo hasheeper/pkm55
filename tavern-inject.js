@@ -1351,35 +1351,34 @@ ${contextText}
         console.log('[PKM] 初始化位置上下文注入...');
         injectLocationContext();
         
-        // ========== iframe 初始化 ==========
-        let iframeInitialized = false;
+        // ========== iframe 初始化（预加载）==========
+        let iframeLoaded = false;
+        
+        // 预加载 iframe（不等待用户点击）
+        iframe.attr('src', PKM_URL);
+        iframe.on('load', async function() {
+            iframeLoaded = true;
+            console.log('[PKM] iframe 已加载');
+            
+            // 加载完成后立即发送 ERA 数据
+            const eraData = await getEraVars();
+            if (eraData && iframe[0].contentWindow) {
+                iframe[0].contentWindow.postMessage({
+                    type: 'PKM_ERA_DATA',
+                    data: eraData
+                }, '*');
+                console.log('[PKM] ✓ ERA 数据已发送到 iframe');
+            }
+        });
         
         // ========== 事件绑定 ==========
         ball.on('click', async function() {
             console.log('[PKM] 打开面板');
             overlay.css('display', 'flex');
             
-            if (!iframeInitialized) {
-                // 获取 ERA 数据
-                console.log('[PKM] 正在获取 ERA 数据...');
-                const eraData = await getEraVars();
-                
-                // 设置 iframe src 并等待加载
-                iframe.attr('src', PKM_URL);
-                
-                iframe.on('load', function() {
-                    // 向 iframe 发送 ERA 数据
-                    if (eraData && iframe[0].contentWindow) {
-                        iframe[0].contentWindow.postMessage({
-                            type: 'PKM_ERA_DATA',
-                            data: eraData
-                        }, '*');
-                        console.log('[PKM] ✓ ERA 数据已发送到 iframe');
-                    }
-                });
-                
-                iframeInitialized = true;
-                console.log('[PKM] iframe 已初始化');
+            // 如果 iframe 已加载，刷新数据
+            if (iframeLoaded) {
+                refreshDashboard();
             }
         });
         
@@ -1403,16 +1402,20 @@ ${contextText}
         
         // ========== 刷新函数 ==========
         async function refreshDashboard() {
-            if (!iframeInitialized) return;
-            
+            // 即使面板未初始化也尝试发送（iframe 可能已加载）
             console.log('[PKM] 刷新面板数据...');
             const eraData = await getEraVars();
             
-            if (eraData && iframe[0].contentWindow) {
-                iframe[0].contentWindow.postMessage({
-                    type: 'PKM_REFRESH',
-                    data: eraData
-                }, '*');
+            if (eraData && iframe[0] && iframe[0].contentWindow) {
+                try {
+                    iframe[0].contentWindow.postMessage({
+                        type: 'PKM_REFRESH',
+                        data: eraData
+                    }, '*');
+                    console.log('[PKM] ✓ 已发送刷新数据到 iframe');
+                } catch (e) {
+                    // iframe 可能未加载，忽略错误
+                }
             }
         }
         
