@@ -220,12 +220,13 @@ window.addEventListener('message', function(event) {
             db = event.data.data;
             window.eraData = db;
             console.log('[PKM] ✓ ERA 数据已更新', db.player?.name);
+            
+            // 先更新坐标，再渲染
+            if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
+            
             // 刷新界面
             if (typeof renderDashboard === 'function') renderDashboard();
             if (typeof renderPartyList === 'function') renderPartyList();
-            
-            // 从 ERA 更新坐标显示
-            if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
             
             // 转发 ERA 数据到 map iframe
             forwardEraToMap(event.data);
@@ -235,12 +236,13 @@ window.addEventListener('message', function(event) {
         if (event.data.data && event.data.data.player) {
             db = event.data.data;
             window.eraData = db;
+            
+            // 先更新坐标，再渲染
+            if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
+            
             // 刷新界面
             if (typeof renderDashboard === 'function') renderDashboard();
             if (typeof renderPartyList === 'function') renderPartyList();
-            
-            // 从 ERA 更新坐标显示
-            if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
             
             // 转发 ERA 数据到 map iframe
             forwardEraToMap(event.data);
@@ -306,6 +308,9 @@ function initApp() {
     // 先加载 ERA 数据
     loadEraData();
     ensureSettingsDefaults();
+    
+    // 先从 ERA 更新坐标（在渲染前）
+    updateCoordsFromEra();
 
     // 初始化悬浮状态栏
     initStickyStatusBar();
@@ -323,20 +328,18 @@ function initApp() {
             console.log('[PKM] 收到刷新消息，更新数据...');
             db = event.data.data;
             ensureSettingsDefaults();
+            
+            // 先更新坐标，再渲染
+            updateCoordsFromEra();
+            
             renderDashboard();
             renderPartyList();
             renderSocialList();
             renderSettings();
             renderBoxPage();
             updateClock();
-            
-            // 从 ERA 更新坐标显示
-            updateCoordsFromEra();
         }
     });
-    
-    // 初始化时从 ERA 读取坐标
-    updateCoordsFromEra();
 }
 
 // 从 ERA 数据更新坐标显示
@@ -1851,7 +1854,7 @@ function renderDashboard() {
                         <div class="mh-col">
                             <div class="mh-zone">ZONE-${currLocCode}</div>
                             <div class="mh-coords" id="dashboard-map-coords">
-                                <span class="coord-display">[0, 0]</span>
+                                <span class="coord-display">[${currentMapCoords.x}, ${currentMapCoords.y}]</span>
                             </div>
                         </div>
                     </div>
