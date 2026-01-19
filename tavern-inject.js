@@ -1166,7 +1166,12 @@
                     // 生成该格子的宝可梦
                     const pokemonList = this.spawnForGrid(gx, gy, spawnTablesData);
                     if (pokemonList.length > 0) {
-                        newSpawns[key] = pokemonList;
+                        // 转换为对象结构（ERA 不支持数组）
+                        const pokemonObj = {};
+                        pokemonList.forEach((poke, idx) => {
+                            pokemonObj[`p${idx + 1}`] = poke;
+                        });
+                        newSpawns[key] = pokemonObj;
                     }
                 }
                 
@@ -1179,7 +1184,20 @@
                 const key = this.getLocationKey(internal.gx, internal.gy);
                 
                 const spawns = eraVars?.world_state?.pokemon_spawns || {};
-                return spawns[key] || [];
+                const gridData = spawns[key];
+                if (!gridData) return [];
+                
+                // 从对象结构转回数组（p1, p2, p3...）
+                const result = [];
+                const keys = Object.keys(gridData).sort((a, b) => {
+                    const numA = parseInt(a.replace('p', ''));
+                    const numB = parseInt(b.replace('p', ''));
+                    return numA - numB;
+                });
+                for (const k of keys) {
+                    if (gridData[k]) result.push(gridData[k]);
+                }
+                return result;
             }
         };
         

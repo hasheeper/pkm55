@@ -523,11 +523,22 @@ const PokemonSpawnCache = {
         if (!locationInfo) return [];
         
         const key = this.getLocationKey(locationInfo);
+        const gridData = this.eraSpawns[key];
         
-        // 从 ERA 数据读取
-        if (this.eraSpawns[key]) {
+        // 从 ERA 数据读取（对象结构 p1, p2, p3...）
+        if (gridData && typeof gridData === 'object') {
+            // 转换为数组
+            const result = [];
+            const keys = Object.keys(gridData).sort((a, b) => {
+                const numA = parseInt(a.replace('p', ''));
+                const numB = parseInt(b.replace('p', ''));
+                return numA - numB;
+            });
+            for (const k of keys) {
+                if (gridData[k]) result.push(gridData[k]);
+            }
             this.currentLocationKey = key;
-            this.currentList = this.eraSpawns[key];
+            this.currentList = result;
             return this.currentList;
         }
         
