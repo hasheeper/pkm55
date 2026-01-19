@@ -1211,6 +1211,11 @@ const TacticalSystem = {
         const itemWidth = (panelW - 24 - itemGap) / cols;
         const startX = panelX + 12;
 
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(panelX, panelY + headerH, panelW, listH);
+        ctx.clip();
+
         pokemonList.slice(0, 8).forEach((p, i) => {
             const col = i % cols;
             const row = Math.floor(i / cols);
@@ -1273,6 +1278,23 @@ const TacticalSystem = {
             ctx.font = "900 11px 'Chakra Petch', monospace";
             ctx.fillText(`Lv.${p.level}`, itemX + itemWidth - 6, itemY + itemH/2 + 4);
         });
+
+        ctx.restore();
+
+        if (pokemonList.length > 4) {
+            const scrollIndicatorY = panelY + totalH - 8;
+            ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+            ctx.beginPath();
+            ctx.arc(panelX + panelW/2 - 8, scrollIndicatorY, 2, 0, Math.PI*2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(panelX + panelW/2, scrollIndicatorY, 2, 0, Math.PI*2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(panelX + panelW/2 + 8, scrollIndicatorY, 2, 0, Math.PI*2);
+            ctx.fill();
+        }
+
         ctx.textAlign = "left";
     },
     
