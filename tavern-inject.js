@@ -1517,7 +1517,15 @@ ${contextText}
         window.addEventListener('pagehide', unloadPkmUI);
         
         // ========== 监听 iframe 的 postMessage 请求 ==========
+        console.log('[PKM] ✓ 注册 postMessage 监听器');
         window.addEventListener('message', function(event) {
+            // 调试：打印所有 PKM 相关消息
+            if (event.data && event.data.type) {
+                const type = event.data.type;
+                if (type.startsWith('PKM_')) {
+                    console.log('[PKM] 收到 postMessage:', type, JSON.stringify(event.data).slice(0, 200));
+                }
+            }
             if (!event.data || !event.data.type) return;
             
             // 处理位置上下文注入请求
@@ -1732,10 +1740,47 @@ ${contextText}
             }
         }
         
-        // ========== 暴露全局函数 ==========
+        // ========== 暴露全局函数到酒馆主窗口 ==========
+        // 方案1: 使用酒馆助手的 initializeGlobal API
+        if (typeof initializeGlobal === 'function') {
+            initializeGlobal('pkmSetLeader', handleLeaderToggle);
+            initializeGlobal('pkmUpdateSettings', handleSettingsToggle);
+            console.log('[PKM] ✓ 已通过 initializeGlobal 暴露函数');
+        }
+        
+        // 方案2: 直接在酒馆主窗口设置全局函数（同源情况下有效）
+        try {
+            const topWin = window.top || window.parent;
+            if (topWin && topWin !== window) {
+                topWin.pkmSetLeader = handleLeaderToggle;
+                topWin.pkmUpdateSettings = handleSettingsToggle;
+                console.log('[PKM] ✓ 已在酒馆主窗口设置 pkmSetLeader 和 pkmUpdateSettings');
+                
+                // 在酒馆主窗口注册 postMessage 监听器
+                topWin.addEventListener('message', function(event) {
+                    if (!event.data || !event.data.type) return;
+                    
+                    if (event.data.type === 'PKM_SET_LEADER') {
+                        const { targetSlot } = event.data.data || {};
+                        console.log('[PKM] 收到 Leader 切换请求 (top listener):', targetSlot);
+                        handleLeaderToggle(targetSlot);
+                    }
+                    
+                    if (event.data.type === 'PKM_UPDATE_SETTINGS') {
+                        const settingsData = event.data.data;
+                        console.log('[PKM] 收到 Settings 更新请求 (top listener):', settingsData);
+                        handleSettingsToggle(settingsData);
+                    }
+                });
+                console.log('[PKM] ✓ 已在酒馆主窗口注册 postMessage 监听器');
+            }
+        } catch (e) {
+            console.warn('[PKM] 无法访问酒馆主窗口:', e.message);
+        }
+        
+        // 方案3: 本地 window 也设置（作为降级）
         window.pkmSetLeader = handleLeaderToggle;
         window.pkmUpdateSettings = handleSettingsToggle;
-        console.log('[PKM] ✓ window.pkmSetLeader 和 window.pkmUpdateSettings 已暴露');
         
         console.log('[PKM] ✓ 悬浮球已加载，点击打开 PKM 面板');
     });

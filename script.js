@@ -34,11 +34,23 @@ window.toggleLeader = function(event, slotStr) {
     } else {
         // 降级：使用 postMessage（tavern-inject.js 跨域方式）
         console.log('[PKM UI] 使用 postMessage 发送 Leader 切换请求');
-        const parentWin = window.parent || window;
-        parentWin.postMessage({
+        const message = {
             type: 'PKM_SET_LEADER',
             data: { targetSlot: slotStr }
-        }, '*');
+        };
+        // 尝试发送到 parent 和 top
+        try {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage(message, '*');
+                console.log('[PKM UI] ✓ 已发送到 parent');
+            }
+            if (window.top && window.top !== window && window.top !== window.parent) {
+                window.top.postMessage(message, '*');
+                console.log('[PKM UI] ✓ 已发送到 top');
+            }
+        } catch (e) {
+            console.error('[PKM UI] postMessage 发送失败:', e);
+        }
     }
 };
 
