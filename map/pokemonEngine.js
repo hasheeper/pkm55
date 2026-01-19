@@ -543,7 +543,10 @@ const PokemonSpawnCache = {
         }
         
         // ERA 中没有该位置的数据，返回空（等待酒馆注入）
-        console.log('[Pokemon] 位置', key, '暂无 ERA 数据，等待酒馆注入');
+        // 防止日志刷屏：只在位置变化时打印一次
+        if (this.currentLocationKey !== key) {
+            console.log('[Pokemon] 位置', key, '暂无 ERA 数据，等待酒馆注入');
+        }
         this.currentLocationKey = key;
         this.currentList = [];
         return [];
