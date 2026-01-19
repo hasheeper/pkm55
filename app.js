@@ -1996,8 +1996,8 @@ function setupMapCallbacks(iframe) {
             // 发送 VariableEdit 到酒馆
             sendLocationVariableEdit(coords);
             
-            // 发送完整位置上下文到父窗口
-            sendFullLocationContext(mapWindow);
+            // 注入位置上下文到世界书
+            injectLocationContext();
         };
         
         // 设置地图加载完成回调
@@ -2020,8 +2020,9 @@ function setupMapCallbacks(iframe) {
                 updateCoordsDisplay(initialCoords);
             }
             
-            // 使用 LocationContextGenerator 生成完整位置上下文并发送给父窗口
-            sendFullLocationContext(mapWindow);
+            // 初始注入位置上下文
+            console.log('[PKM] 触发初始位置上下文注入');
+            injectLocationContext();
         };
         
         console.log('[PKM] MAP 回调设置完成');
@@ -2096,49 +2097,7 @@ function generateLocationContextText() {
 }
 
 /**
- * 发送完整位置上下文到父窗口（使用 LocationContextGenerator）
- */
-function sendFullLocationContext(mapWindow) {
-    try {
-        const parentWindow = getParentWindow();
-        if (parentWindow === window) {
-            console.log('[PKM] 非 iframe 模式，跳过位置上下文发送');
-            return;
-        }
-        
-        // 获取玩家当前格子坐标
-        const playerState = mapWindow.playerState;
-        if (!playerState || typeof playerState.gx !== 'number') {
-            console.log('[PKM] 无玩家位置，跳过位置上下文发送');
-            return;
-        }
-        
-        // 使用 LocationContextGenerator 生成完整上下文
-        const generator = mapWindow.LocationContextGenerator;
-        if (!generator) {
-            console.log('[PKM] LocationContextGenerator 不可用，跳过');
-            return;
-        }
-        
-        const contextText = generator.generateContextText(playerState.gx, playerState.gy);
-        if (!contextText) {
-            console.log('[PKM] 无法生成位置上下文');
-            return;
-        }
-        
-        // 发送给父窗口
-        parentWindow.postMessage({
-            type: 'PKM_LOCATION_CONTEXT',
-            content: contextText
-        }, '*');
-        console.log('[PKM] ✓ 完整位置上下文已发送到父窗口');
-    } catch (e) {
-        console.error('[PKM] 发送位置上下文失败:', e);
-    }
-}
-
-/**
- * 注入位置上下文到酒馆世界书（旧方法，保留兼容）
+ * 注入位置上下文到酒馆世界书
  * 使用 SillyTavern 的 injectPrompts API
  */
 function injectLocationContext() {

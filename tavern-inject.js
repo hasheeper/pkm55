@@ -208,50 +208,331 @@
             });
         }
         
-        // ========== 位置上下文注入（接收来自 iframe 的完整上下文）==========
-        let lastLocationContext = null;
-        
-        function doInjectLocationContext(contextText) {
-            if (!contextText) {
-                console.log('[PKM] 无位置上下文内容，跳过注入');
-                return;
-            }
+        // ========== 位置上下文生成器（后端版本，完整逻辑）==========
+        const LocationContextBackend = {
+            // 数据缓存
+            mapInfoData: null,
+            mapData: null,
+            spawnTablesData: null,
+            dataLoaded: false,
             
-            const promptContent = `<location_context>
+            // 五大区域定义
+            REGIONS: {
+                'Region_Zenith': { name: 'Z区 ZENITH (中枢区)', center: [1, 1], short: 'Z' },
+                'Region_Neon': { name: 'N区 NEON (霓虹区)', center: [12, -12], short: 'N' },
+                'Region_Bloom': { name: 'B区 BLOOM (盛放区)', center: [-13, -13], short: 'B' },
+                'Region_Shadow': { name: 'S区 SHADOW (暗影区)', center: [12, 12], short: 'S' },
+                'Region_Apex': { name: 'A区 APEX (极诣区)', center: [-13, 13], short: 'A' }
+            },
+            
+            // 从mapinfo.json加载的地标数据
+            regionZones: {},
+            biomeFlavor: {},
+            regionDescriptions: {},
+            service: {},
+            placeAnchor: {},
+            systemWarps: {},
+            transitInfra: {},
+            npcContext: {},
+            
+            // 加载所有数据文件
+            async loadData() {
+                if (this.dataLoaded) return true;
+                
+                try {
+                    console.log('[PKM] 加载地图数据文件...');
+                    
+                    // 并行加载所有数据
+                    const [mapInfoRes, mapDataRes] = await Promise.all([
+                        fetch(PKM_URL + 'map/data/mapinfo.json'),
+                        fetch(PKM_URL + 'map/data/mapdata.json')
+                    ]);
+                    
+                    if (mapInfoRes.ok) {
+                        this.mapInfoData = await mapInfoRes.json();
+                        this.initFromMapInfo(this.mapInfoData);
+                        console.log('[PKM] ✓ mapinfo.json 已加载');
+                    }
+                    
+                    if (mapDataRes.ok) {
+                        this.mapData = await mapDataRes.json();
+                        console.log('[PKM] ✓ mapdata.json 已加载');
+                    }
+                    
+                    // 加载 pkmdata.js（通过动态 script）
+                    await this.loadPkmData();
+                    
+                    this.dataLoaded = true;
+                    console.log('[PKM] ✓ 所有地图数据加载完成');
+                    return true;
+                } catch (e) {
+                    console.error('[PKM] 加载地图数据失败:', e);
+                    return false;
+                }
+            },
+            
+            // 加载 pkmdata.js
+            async loadPkmData() {
+                return new Promise((resolve) => {
+                    if (window.SPAWN_TABLES_DATA) {
+                        this.spawnTablesData = window.SPAWN_TABLES_DATA;
+                        resolve();
+                        return;
+                    }
+                    
+                    const script = document.createElement('script');
+                    script.src = PKM_URL + 'map/data/pkmdata.js';
+                    script.onload = () => {
+                        this.spawnTablesData = window.SPAWN_TABLES_DATA;
+                        console.log('[PKM] ✓ pkmdata.js 已加载');
+                        resolve();
+                    };
+                    script.onerror = () => {
+                        console.warn('[PKM] pkmdata.js 加载失败');
+                        resolve();
+                    };
+                    document.head.appendChild(script);
+                });
+            },
+            
+            // 初始化 mapinfo 数据
+            initFromMapInfo(mapInfoData) {
+                if (!mapInfoData) return;
+                
+                this.regionZones = mapInfoData.region_zones || {};
+                this.biomeFlavor = mapInfoData.biome_flavor || {};
+                const serviceData = mapInfoData.service || {};
+                this.service = serviceData;
+                this.placeAnchor = serviceData.place_anchor || mapInfoData.place_anchor || {};
+                this.systemWarps = mapInfoData.system_warps || {};
+                this.transitInfra = mapInfoData.transit_infrastructure || {};
+                this.npcContext = mapInfoData.npc_actor_context || {};
+                
+                if (mapInfoData.narrative_layer && mapInfoData.narrative_layer.world_atmosphere) {
+                    this.regionDescriptions = mapInfoData.narrative_layer.world_atmosphere.regions || {};
+                }
+            },
+            
+            // 根据显示坐标判断所属大区
+            getRegionByCoords(x, y) {
+                // 基于象限和距离判断
+                if (Math.abs(x) <= 6 && Math.abs(y) <= 6) return 'Region_Zenith';
+                if (x > 0 && y < 0) return 'Region_Neon';
+                if (x < 0 && y < 0) return 'Region_Bloom';
+                if (x > 0 && y > 0) return 'Region_Shadow';
+                if (x < 0 && y > 0) return 'Region_Apex';
+                return 'Region_Zenith';
+            },
+            
+            // 根据坐标查找最近的 Region_Zone
+            findNearestRegionZone(x, y) {
+                let nearest = null;
+                let minDist = Infinity;
+                
+                for (const [zoneName, zoneData] of Object.entries(this.regionZones)) {
+                    if (zoneData.center_point) {
+                        const dist = Math.abs(zoneData.center_point[0] - x) + Math.abs(zoneData.center_point[1] - y);
+                        if (dist < minDist && dist <= 8) {
+                            minDist = dist;
+                            nearest = { name: zoneName, data: zoneData, distance: dist };
+                        }
+                    }
+                }
+                return nearest;
+            },
+            
+            // 根据坐标查找最近的 Biome_Zone
+            findNearestBiomeZone(x, y) {
+                let nearest = null;
+                let minDist = Infinity;
+                
+                for (const [biomeName, biomeData] of Object.entries(this.biomeFlavor)) {
+                    if (biomeData.center_point) {
+                        const dist = Math.abs(biomeData.center_point[0] - x) + Math.abs(biomeData.center_point[1] - y);
+                        if (dist < minDist && dist <= 10) {
+                            minDist = dist;
+                            nearest = { name: biomeName, data: biomeData, distance: dist };
+                        }
+                    }
+                }
+                return nearest;
+            },
+            
+            // 威胁度标签
+            getThreatLabel(threat) {
+                const labels = { 0: '未知', 1: '安全', 2: '低危', 3: '中危', 4: '高危', 5: '极危', 6: '和平' };
+                return labels[threat] || '未知';
+            },
+            
+            // 生成完整的位置上下文文本
+            generateContextText(x, y, quadrant) {
+                const lines = [];
+                
+                // 获取大区
+                const regionId = this.getRegionByCoords(x, y);
+                const regionInfo = this.REGIONS[regionId];
+                const regionShort = regionInfo?.short || '?';
+                
+                lines.push('═══════════════════════════════════════');
+                lines.push('【当前位置】');
+                lines.push(`坐标: [${x}, ${y}] ${regionShort}`);
+                
+                // 大区信息
+                if (regionInfo) {
+                    lines.push(`所属大区: ${regionInfo.name}`);
+                    
+                    const regionDesc = this.regionDescriptions[regionId];
+                    if (regionDesc) {
+                        if (regionDesc.prompt_snippet) {
+                            lines.push(`【大区氛围】${regionDesc.prompt_snippet}`);
+                        }
+                        if (regionDesc.geography_desc) {
+                            lines.push(`【地理概述】${regionDesc.geography_desc}`);
+                        }
+                    }
+                }
+                
+                // 查找最近的 Region_Zone
+                const nearestRZ = this.findNearestRegionZone(x, y);
+                if (nearestRZ) {
+                    lines.push(`所属设施区: ${nearestRZ.name} (~${nearestRZ.distance}格)`);
+                    if (nearestRZ.data.exterior_view) {
+                        lines.push(`【外观描述】${nearestRZ.data.exterior_view}`);
+                    }
+                    if (nearestRZ.data.internal_reality) {
+                        lines.push(`【内部环境】${nearestRZ.data.internal_reality}`);
+                    }
+                }
+                
+                // 查找最近的 Biome_Zone
+                const nearestBZ = this.findNearestBiomeZone(x, y);
+                if (nearestBZ) {
+                    lines.push(`所属生态区: ${nearestBZ.name} (~${nearestBZ.distance}格)`);
+                    if (nearestBZ.data.visual_texture) {
+                        lines.push(`【视觉纹理】${nearestBZ.data.visual_texture}`);
+                    }
+                    if (nearestBZ.data.sensory_feed) {
+                        lines.push(`【感官体验】${nearestBZ.data.sensory_feed}`);
+                    }
+                }
+                
+                // 本大区地标
+                lines.push('');
+                lines.push('───────────────────────────────────────');
+                lines.push(`【本大区地标】(${regionInfo?.name || regionId})`);
+                
+                const landmarks = this.getRegionLandmarks(regionId, x, y);
+                if (landmarks.length > 0) {
+                    for (const lm of landmarks.slice(0, 6)) {
+                        lines.push(`  • ${lm.name} [${lm.center[0]}, ${lm.center[1]}] (~${lm.distance}格)`);
+                    }
+                }
+                
+                // 全图区域概览
+                lines.push('');
+                lines.push('───────────────────────────────────────');
+                lines.push('【全图区域】');
+                
+                for (const [id, data] of Object.entries(this.REGIONS)) {
+                    const isCurrent = id === regionId;
+                    const marker = isCurrent ? '★' : '○';
+                    lines.push(`  ${marker} ${data.name} [${data.center[0]}, ${data.center[1]}]`);
+                }
+                
+                lines.push('═══════════════════════════════════════');
+                
+                return lines.join('\n');
+            },
+            
+            // 获取大区内的地标
+            getRegionLandmarks(regionId, x, y) {
+                const landmarks = [];
+                const regionPrefixes = {
+                    'Region_Zenith': ['Aether', 'Royal', 'Living', 'Lusamine', 'Eco', 'Academic', 'Zero_Halo', 'Arcadia'],
+                    'Region_Neon': ['Iono', 'Toxic', 'Cyber', 'Port', 'Glitch', 'Skyline', 'Synth', 'Golden', 'Radiant', 'Chrome'],
+                    'Region_Bloom': ['Pearl', 'Sunflora', 'Marina', 'Sapphire', 'Hermit', 'Aroma', 'Jade', 'Deep_Root', 'Silt', 'Breeze', 'Prism', 'Crystal', 'Mirror'],
+                    'Region_Shadow': ['Grim', 'Venom', 'Frost', 'Requiem', 'Canal', 'Kamunagi', 'Cinder', 'Silent', 'Spirit', 'Twilight', 'Crimson_Peat', 'Ginkgo', 'Mercury'],
+                    'Region_Apex': ['Crimson_Forge', 'Titan', 'Dune', 'Ruins', 'Savanna', 'Scorched', 'Obsidian', 'Inferno', 'Crimson_Badlands', 'Frostbite', 'Desolate']
+                };
+                
+                const prefixes = regionPrefixes[regionId] || [];
+                
+                for (const [zoneName, zoneData] of Object.entries(this.regionZones)) {
+                    if (prefixes.some(p => zoneName.includes(p)) && zoneData.center_point) {
+                        const dist = Math.abs(zoneData.center_point[0] - x) + Math.abs(zoneData.center_point[1] - y);
+                        landmarks.push({ name: zoneName, center: zoneData.center_point, distance: dist, type: 'zone' });
+                    }
+                }
+                
+                for (const [biomeName, biomeData] of Object.entries(this.biomeFlavor)) {
+                    if (prefixes.some(p => biomeName.includes(p)) && biomeData.center_point) {
+                        const dist = Math.abs(biomeData.center_point[0] - x) + Math.abs(biomeData.center_point[1] - y);
+                        landmarks.push({ name: biomeName, center: biomeData.center_point, distance: dist, type: 'biome' });
+                    }
+                }
+                
+                landmarks.sort((a, b) => a.distance - b.distance);
+                return landmarks;
+            }
+        };
+        
+        // ========== 位置上下文注入函数 ==========
+        async function injectLocationContext() {
+            try {
+                // 确保数据已加载
+                await LocationContextBackend.loadData();
+                
+                const eraVars = await getEraVars();
+                if (!eraVars) {
+                    console.log('[PKM] 无 ERA 数据，跳过位置注入');
+                    return;
+                }
+                
+                // 获取位置信息
+                const location = eraVars?.world_state?.location;
+                if (!location || typeof location.x !== 'number') {
+                    console.log('[PKM] 无位置数据，跳过位置注入');
+                    return;
+                }
+                
+                // 生成完整的位置上下文文本
+                const contextText = LocationContextBackend.generateContextText(
+                    location.x, 
+                    location.y, 
+                    location.quadrant || 'NE'
+                );
+                
+                const promptContent = `<location_context>
 ${contextText}
 </location_context>`;
-            
-            // 先清除旧注入
-            if (typeof uninjectPrompts === 'function') {
-                try {
-                    uninjectPrompts([LOCATION_INJECT_ID]);
-                } catch (e) {
-                    // 忽略
+                
+                // 先清除旧注入
+                if (typeof uninjectPrompts === 'function') {
+                    try { uninjectPrompts([LOCATION_INJECT_ID]); } catch (e) {}
                 }
-            }
-            
-            // 注入新内容
-            if (typeof injectPrompts === 'function') {
-                injectPrompts([{
-                    id: LOCATION_INJECT_ID,
-                    position: 'after_wi_scan',
-                    depth: 0,
-                    role: 'system',
-                    should_scan: false,
-                    content: promptContent
-                }]);
-                console.log('[PKM] ✓ 位置上下文已注入到世界书');
-            } else {
-                console.warn('[PKM] injectPrompts API 不可用');
+                
+                // 注入新内容
+                if (typeof injectPrompts === 'function') {
+                    injectPrompts([{
+                        id: LOCATION_INJECT_ID,
+                        position: 'after_wi_scan',
+                        depth: 0,
+                        role: 'system',
+                        should_scan: false,
+                        content: promptContent
+                    }]);
+                    console.log('[PKM] ✓ 位置上下文已注入:', location);
+                } else {
+                    console.warn('[PKM] injectPrompts API 不可用');
+                }
+            } catch (e) {
+                console.error('[PKM] 位置上下文注入失败:', e);
             }
         }
         
-        // 如果有缓存的位置上下文，重新注入
-        function reinjectLocationContext() {
-            if (lastLocationContext) {
-                doInjectLocationContext(lastLocationContext);
-            }
-        }
+        // ========== 初始化时注入位置上下文 ==========
+        console.log('[PKM] 初始化位置上下文注入...');
+        injectLocationContext();
         
         // ========== iframe 初始化 ==========
         let iframeInitialized = false;
@@ -323,19 +604,19 @@ ${contextText}
             eventOn('era:writeDone', () => {
                 console.log('[PKM] 检测到 ERA 变量更新，刷新面板和位置注入');
                 refreshDashboard();
-                reinjectLocationContext(); // 重新注入缓存的位置上下文
+                injectLocationContext(); // 刷新位置上下文注入
             });
             
             eventOn('generation_ended', () => {
                 console.log('[PKM] 检测到消息生成完成，刷新面板和位置注入');
                 refreshDashboard();
-                reinjectLocationContext(); // 重新注入缓存的位置上下文
+                injectLocationContext(); // 刷新位置上下文注入
             });
             
             eventOn('chat_changed', () => {
                 console.log('[PKM] 检测到对话切换，重置面板');
                 iframeInitialized = false;
-                reinjectLocationContext(); // 切换对话时也重新注入
+                injectLocationContext(); // 切换对话时也刷新位置注入
             });
         }
         
@@ -343,28 +624,38 @@ ${contextText}
         window.addEventListener('message', function(event) {
             if (!event.data || !event.data.type) return;
             
-            // 处理完整位置上下文注入请求（来自 iframe 的 LocationContextGenerator）
-            if (event.data.type === 'PKM_LOCATION_CONTEXT') {
-                const { content } = event.data;
-                console.log('[PKM] 收到完整位置上下文');
-                
-                // 缓存位置上下文
-                lastLocationContext = content;
-                
-                // 执行注入
-                doInjectLocationContext(content);
-            }
-            
-            // 处理旧格式的位置上下文注入请求（兼容）
+            // 处理位置上下文注入请求
             if (event.data.type === 'PKM_INJECT_LOCATION') {
                 const { id, content, position, depth } = event.data;
                 console.log('[PKM] 收到位置上下文注入请求:', id);
                 
-                // 缓存位置上下文
-                lastLocationContext = content;
-                
-                // 执行注入
-                doInjectLocationContext(content);
+                try {
+                    // 先清除旧注入
+                    if (typeof uninjectPrompts === 'function') {
+                        try {
+                            uninjectPrompts([id]);
+                        } catch (e) {
+                            // 忽略清除失败
+                        }
+                    }
+                    
+                    // 注入新内容（参考 pkm-tavern-plugin.js 的格式）
+                    if (typeof injectPrompts === 'function') {
+                        injectPrompts([{
+                            id: id,
+                            position: position || 'after_wi_scan',
+                            depth: depth || 0,
+                            role: 'system',
+                            should_scan: false,
+                            content: content
+                        }]);
+                        console.log('[PKM] ✓ 位置上下文已注入到世界书');
+                    } else {
+                        console.warn('[PKM] injectPrompts API 不可用');
+                    }
+                } catch (e) {
+                    console.error('[PKM] 位置上下文注入失败:', e);
+                }
             }
             
             // 处理清除注入请求
