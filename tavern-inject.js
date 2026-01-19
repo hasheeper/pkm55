@@ -1483,6 +1483,39 @@ ${contextText}
             });
         }
         
+        // ========== 卸载清理函数（退出角色卡时调用）==========
+        function unloadPkmUI() {
+            console.log('[PKM] UI 脚本开始卸载');
+            
+            // 移除 DOM 元素
+            $('#pkm-container').remove();
+            $('#pkm-anim-style').remove();
+            $('[id^="pkm-"]').remove();
+            
+            // 清理事件监听
+            if (typeof eventRemoveListener !== 'undefined') {
+                try {
+                    eventRemoveListener('era:writeDone');
+                    eventRemoveListener('generation_ended');
+                    eventRemoveListener('chat_changed');
+                } catch (e) {
+                    // 忽略清除失败
+                }
+            }
+            
+            // 清理全局变量
+            delete window.pkmDashboard;
+            
+            // 移除 pagehide 监听器
+            window.removeEventListener('pagehide', unloadPkmUI);
+            
+            console.log('[PKM] UI 脚本卸载完成');
+        }
+        
+        // 监听 pagehide 事件（退出角色卡时触发）
+        window.removeEventListener('pagehide', unloadPkmUI);
+        window.addEventListener('pagehide', unloadPkmUI);
+        
         // ========== 监听 iframe 的 postMessage 请求 ==========
         window.addEventListener('message', function(event) {
             if (!event.data || !event.data.type) return;
