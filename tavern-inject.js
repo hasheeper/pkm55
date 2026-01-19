@@ -1,13 +1,14 @@
 /**
  * PKM Dashboard - SillyTavern 悬浮球注入脚本
  * 点击悬浮球打开 GitHub Pages 上的 PKM 面板
- * 包含 ERA 变量获取和传递逻辑
+ * 包含 ERA 变量获取、位置上下文注入逻辑
  */
 
 (function() {
     'use strict';
     
     const PKM_URL = 'https://hasheeper.github.io/pkm55/';
+    const LOCATION_INJECT_ID = 'pkm_location_context';
     
     // 等待 jQuery 加载
     function waitForJQuery(callback) {
@@ -207,6 +208,61 @@
             });
         }
         
+        // ========== 位置上下文注入（直接在酒馆中处理）==========
+        async function injectLocationContext() {
+            try {
+                const eraVars = await getEraVars();
+                if (!eraVars) {
+                    console.log('[PKM] 无 ERA 数据，跳过位置注入');
+                    return;
+                }
+                
+                // 获取位置信息
+                const location = eraVars?.world_state?.location;
+                if (!location || typeof location.x !== 'number') {
+                    console.log('[PKM] 无位置数据，跳过位置注入');
+                    return;
+                }
+                
+                // 生成位置上下文文本
+                const contextText = `当前位置坐标: (${location.x}, ${location.y}) 象限: ${location.quadrant || 'NE'}`;
+                
+                const promptContent = `<location_context>
+${contextText}
+</location_context>`;
+                
+                // 先清除旧注入
+                if (typeof uninjectPrompts === 'function') {
+                    try {
+                        uninjectPrompts([LOCATION_INJECT_ID]);
+                    } catch (e) {
+                        // 忽略
+                    }
+                }
+                
+                // 注入新内容
+                if (typeof injectPrompts === 'function') {
+                    injectPrompts([{
+                        id: LOCATION_INJECT_ID,
+                        position: 'after_wi_scan',
+                        depth: 0,
+                        role: 'system',
+                        should_scan: false,
+                        content: promptContent
+                    }]);
+                    console.log('[PKM] ✓ 位置上下文已注入:', location);
+                } else {
+                    console.warn('[PKM] injectPrompts API 不可用');
+                }
+            } catch (e) {
+                console.error('[PKM] 位置上下文注入失败:', e);
+            }
+        }
+        
+        // ========== 初始化时注入位置上下文 ==========
+        console.log('[PKM] 初始化位置上下文注入...');
+        injectLocationContext();
+        
         // ========== iframe 初始化 ==========
         let iframeInitialized = false;
         
@@ -275,18 +331,21 @@
         // ========== 监听酒馆事件 ==========
         if (typeof eventOn !== 'undefined') {
             eventOn('era:writeDone', () => {
-                console.log('[PKM] 检测到 ERA 变量更新，刷新面板');
+                console.log('[PKM] 检测到 ERA 变量更新，刷新面板和位置注入');
                 refreshDashboard();
+                injectLocationContext(); // 刷新位置上下文注入
             });
             
             eventOn('generation_ended', () => {
-                console.log('[PKM] 检测到消息生成完成，刷新面板');
+                console.log('[PKM] 检测到消息生成完成，刷新面板和位置注入');
                 refreshDashboard();
+                injectLocationContext(); // 刷新位置上下文注入
             });
             
             eventOn('chat_changed', () => {
                 console.log('[PKM] 检测到对话切换，重置面板');
                 iframeInitialized = false;
+                injectLocationContext(); // 切换对话时也刷新位置注入
             });
         }
         
