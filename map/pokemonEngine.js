@@ -486,12 +486,12 @@ const PokemonSpawnEngine = {
 window.PokemonSpawnEngine = PokemonSpawnEngine;
 
 // =====================================================
-// 第4部分：宝可梦数据缓存管理
+// 第4部分：宝可梦数据缓存管理（从 ERA 读取）
 // =====================================================
 
 const PokemonSpawnCache = {
-    // 缓存数据：按位置键存储
-    cache: {},
+    // ERA 数据缓存
+    eraSpawns: {},
     
     // 当前位置的宝可梦列表
     currentList: [],
@@ -502,71 +502,57 @@ const PokemonSpawnCache = {
      */
     getLocationKey(locationInfo) {
         if (!locationInfo) return null;
-        // 使用gx,gy坐标确保每个格子有不同的宝可梦
         return `${locationInfo.gx}_${locationInfo.gy}`;
     },
     
     /**
-     * 获取或生成当前位置的宝可梦
-     * 只有位置变化时才重新生成
+     * 从 ERA 数据更新缓存
+     * @param {Object} eraData - 从酒馆接收的 ERA 数据
+     */
+    updateFromEra(eraData) {
+        if (eraData?.world_state?.pokemon_spawns) {
+            this.eraSpawns = eraData.world_state.pokemon_spawns;
+            console.log('[Pokemon] ✓ 已从 ERA 更新宝可梦数据:', Object.keys(this.eraSpawns).length, '个区域');
+        }
+    },
+    
+    /**
+     * 获取当前位置的宝可梦（从 ERA 数据读取）
      */
     getForLocation(locationInfo) {
         if (!locationInfo) return [];
         
         const key = this.getLocationKey(locationInfo);
         
-        // 如果位置没变，返回缓存的列表
-        if (key === this.currentLocationKey && this.currentList.length > 0) {
-            return this.currentList;
-        }
-        
-        // 检查是否有该位置的缓存
-        if (this.cache[key]) {
+        // 从 ERA 数据读取
+        if (this.eraSpawns[key]) {
             this.currentLocationKey = key;
-            this.currentList = this.cache[key];
+            this.currentList = this.eraSpawns[key];
             return this.currentList;
         }
         
-        // 生成新的宝可梦列表
-        const newList = PokemonSpawnEngine.spawnNearby(locationInfo);
-        
-        // 缓存结果
-        this.cache[key] = newList;
+        // ERA 中没有该位置的数据，返回空（等待酒馆注入）
+        console.log('[Pokemon] 位置', key, '暂无 ERA 数据，等待酒馆注入');
         this.currentLocationKey = key;
-        this.currentList = newList;
-        
-        console.log('[Pokemon] 生成新列表:', key, newList);
-        return newList;
+        this.currentList = [];
+        return [];
     },
     
     /**
-     * 强制刷新当前位置的宝可梦
+     * 强制刷新 - 现在只是重新从 ERA 读取
      */
     refresh(locationInfo) {
         if (!locationInfo) {
             locationInfo = getPlayerLocationInfo();
         }
-        if (!locationInfo) return [];
-        
-        const key = this.getLocationKey(locationInfo);
-        
-        // 生成新的宝可梦列表
-        const newList = PokemonSpawnEngine.spawnNearby(locationInfo);
-        
-        // 更新缓存
-        this.cache[key] = newList;
-        this.currentLocationKey = key;
-        this.currentList = newList;
-        
-        console.log('[Pokemon] 刷新列表:', key, newList);
-        return newList;
+        return this.getForLocation(locationInfo);
     },
     
     /**
      * 清除所有缓存
      */
     clearAll() {
-        this.cache = {};
+        this.eraSpawns = {};
         this.currentList = [];
         this.currentLocationKey = null;
     }

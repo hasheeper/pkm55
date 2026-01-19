@@ -135,6 +135,27 @@ window.setPlayerPosition = function(displayCoords) {
 // 地图加载完成后的回调（供外部使用）
 window.onMapReady = null;
 
+// ========== 接收酒馆 ERA 数据（宝可梦刷新等）==========
+window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'PKM_ERA_DATA') {
+        const eraData = event.data.data;
+        console.log('[MAP] 收到 ERA 数据:', eraData);
+        
+        // 更新宝可梦缓存（从 ERA 读取）
+        if (window.PokemonSpawnCache && eraData?.world_state?.pokemon_spawns) {
+            window.PokemonSpawnCache.updateFromEra(eraData);
+        }
+        
+        // 更新玩家位置（如果有）
+        if (eraData?.world_state?.location) {
+            const loc = eraData.world_state.location;
+            if (typeof loc.x === 'number' && typeof loc.y === 'number') {
+                window.setPlayerPosition({ x: loc.x, y: loc.y });
+            }
+        }
+    }
+});
+
 // 缓存与状态 - 延迟初始化以确保 DOM 准备好
 let canvas, ctx, tooltip, toggleContainer, playerControls, playerCoordsEl;
 

@@ -1183,7 +1183,23 @@
             }
         };
         
-        // ========== ERA 变量操作函数 ==========
+        // ========== ERA 变量操作函数（参考 pkm-tavern-plugin.js）==========
+        
+        // 插入 ERA 变量（只增不改）
+        function insertEraVars(data) {
+            if (typeof eventEmit === 'function') {
+                eventEmit('era:insertByObject', data);
+            }
+        }
+        
+        // 更新 ERA 变量
+        function updateEraVars(data) {
+            if (typeof eventEmit === 'function') {
+                eventEmit('era:updateByObject', data);
+            }
+        }
+        
+        // 插入宝可梦区域数据
         async function eraInsertPokemonSpawns(newSpawns) {
             if (!newSpawns || Object.keys(newSpawns).length === 0) return;
             
@@ -1193,25 +1209,18 @@
                 }
             };
             
-            // 使用 eventEmit 发送 ERA VariableInsert
-            if (typeof eventEmit === 'function') {
-                eventEmit('era:variableInsert', insertData);
-                console.log('[PKM] ✓ 宝可梦区域已注入 ERA:', Object.keys(newSpawns));
-            }
+            // 使用 era:insertByObject 插入（只增不改）
+            insertEraVars(insertData);
+            console.log('[PKM] ✓ 宝可梦区域已注入 ERA:', Object.keys(newSpawns));
         }
         
+        // 清除宝可梦区域数据（每日刷新）
         async function eraDeletePokemonSpawns() {
-            // 删除整个 pokemon_spawns 对象（一天结束时刷新）
-            const deleteData = {
-                world_state: {
-                    pokemon_spawns: {}
-                }
-            };
-            
-            if (typeof eventEmit === 'function') {
-                eventEmit('era:variableDelete', deleteData);
-                console.log('[PKM] ✓ 宝可梦区域已清除（每日刷新）');
-            }
+            // 使用 updateEraVars 将 pokemon_spawns 设为空对象
+            updateEraVars({
+                'world_state.pokemon_spawns': {}
+            });
+            console.log('[PKM] ✓ 宝可梦区域已清除（每日刷新）');
         }
         
         // 记录上次的游戏日期，用于检测日期变化
@@ -1237,7 +1246,8 @@
                 }
                 
                 // ========== 检测日期变化，清除宝可梦刷新 ==========
-                const currentDay = eraVars?.world_state?.time?.day || eraVars?.game_time?.day;
+                // 时间路径: world_state.time.day（参考 pkm-tavern-plugin.js）
+                const currentDay = eraVars?.world_state?.time?.day;
                 if (lastGameDay !== null && currentDay !== null && currentDay > lastGameDay) {
                     console.log('[PKM] 检测到日期变化，清除宝可梦刷新');
                     await eraDeletePokemonSpawns();
