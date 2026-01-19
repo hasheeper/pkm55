@@ -364,6 +364,95 @@
                 return labels[threat] || '未知';
             },
             
+            // 显示坐标转内部格子坐标（与 game.js 的 toInternalCoords 一致）
+            toInternalCoords(displayX, displayY) {
+                // 地图中心点（内部坐标）
+                const centerGx = 25;
+                const centerGy = 25;
+                // 显示坐标 -> 内部坐标
+                return {
+                    gx: centerGx + displayX,
+                    gy: centerGy + displayY
+                };
+            },
+            
+            // 从 mapdata.json 获取指定格子的实体信息
+            getEntitiesAtGrid(gx, gy) {
+                const entities = {
+                    biomeZone: null,
+                    regionZone: null,
+                    placeAnchor: null,
+                    npcActor: null,
+                    pokemonCenter: null,
+                    warp: null,
+                    service: null,
+                    bedRest: null,
+                    pcTerminal: null,
+                    policeBox: null,
+                    transitStation: null,
+                    lavaLine: null
+                };
+                
+                if (!this.mapData || !this.mapData.levels || !this.mapData.levels[0]) return entities;
+                
+                const levelData = this.mapData.levels[0];
+                const worldX = gx * 16;
+                const worldY = gy * 16;
+                
+                // 遍历所有实体层
+                for (const layer of levelData.layerInstances || []) {
+                    if (layer.__type !== 'Entities' || !layer.entityInstances) continue;
+                    
+                    for (const ent of layer.entityInstances) {
+                        const ex = ent.px[0];
+                        const ey = ent.px[1];
+                        const ew = ent.width;
+                        const eh = ent.height;
+                        
+                        // 检查实体是否覆盖当前格子
+                        if (worldX >= ex && worldX < ex + ew && worldY >= ey && worldY < ey + eh) {
+                            const id = ent.__identifier;
+                            const layerId = layer.__identifier;
+                            
+                            // 获取实体的字段值
+                            let fieldValue = null;
+                            if (ent.fieldInstances && ent.fieldInstances.length > 0) {
+                                fieldValue = ent.fieldInstances[0].__value;
+                            }
+                            
+                            // 根据层名或实体类型匹配
+                            if (layerId === 'Biome_Zone' || id === 'Biome' || id.startsWith('Biome')) {
+                                entities.biomeZone = fieldValue || id;
+                            } else if (layerId === 'Region_Zone' || id.startsWith('Region_')) {
+                                entities.regionZone = fieldValue || id;
+                            } else if (layerId === 'Place_Anchor' || id === 'Place_Anchor') {
+                                entities.placeAnchor = fieldValue;
+                            } else if (layerId === 'NPC_Actor' || id === 'NPC_Actor') {
+                                entities.npcActor = fieldValue;
+                            } else if (id === 'Pokemon_Centers') {
+                                entities.pokemonCenter = fieldValue;
+                            } else if (id === 'Warp') {
+                                entities.warp = fieldValue;
+                            } else if (id === 'Shop_Kiosk') {
+                                entities.service = fieldValue;
+                            } else if (id === 'Bed_Rest') {
+                                entities.bedRest = fieldValue;
+                            } else if (id === 'PC_Terminal') {
+                                entities.pcTerminal = 'PC_Terminal';
+                            } else if (id === 'Police_Box') {
+                                entities.policeBox = fieldValue;
+                            } else if (id === 'Transit_Station') {
+                                entities.transitStation = fieldValue;
+                            } else if (id === 'Lava_Line') {
+                                entities.lavaLine = fieldValue;
+                            }
+                        }
+                    }
+                }
+                
+                return entities;
+            },
+            
             // 生成完整的位置上下文文本
             generateContextText(x, y, quadrant) {
                 const lines = [];
@@ -372,6 +461,10 @@
                 const regionId = this.getRegionByCoords(x, y);
                 const regionInfo = this.REGIONS[regionId];
                 const regionShort = regionInfo?.short || '?';
+                
+                // 转换为内部坐标并获取实体
+                const internal = this.toInternalCoords(x, y);
+                const entities = this.getEntitiesAtGrid(internal.gx, internal.gy);
                 
                 lines.push('═══════════════════════════════════════');
                 lines.push('【当前位置】');
@@ -392,27 +485,104 @@
                     }
                 }
                 
-                // 查找最近的 Region_Zone
-                const nearestRZ = this.findNearestRegionZone(x, y);
-                if (nearestRZ) {
-                    lines.push(`所属设施区: ${nearestRZ.name} (~${nearestRZ.distance}格)`);
-                    if (nearestRZ.data.exterior_view) {
-                        lines.push(`【外观描述】${nearestRZ.data.exterior_view}`);
+                // Region_Zone 信息（优先使用实体数据，否则用最近的）
+                if (entities.regionZone) {
+                    lines.push(`所属设施区: ${entities.regionZone}`);
+                    const rzDesc = this.regionZones[entities.regionZone];
+                    if (rzDesc) {
+                        if (rzDesc.exterior_view) lines.push(`【外观描述】${rzDesc.exterior_view}`);
+                        if (rzDesc.internal_reality) lines.push(`【内部环境】${rzDesc.internal_reality}`);
                     }
-                    if (nearestRZ.data.internal_reality) {
-                        lines.push(`【内部环境】${nearestRZ.data.internal_reality}`);
+                } else {
+                    const nearestRZ = this.findNearestRegionZone(x, y);
+                    if (nearestRZ) {
+                        lines.push(`附近设施区: ${nearestRZ.name} (~${nearestRZ.distance}格)`);
+                        if (nearestRZ.data.exterior_view) lines.push(`【外观描述】${nearestRZ.data.exterior_view}`);
+                        if (nearestRZ.data.internal_reality) lines.push(`【内部环境】${nearestRZ.data.internal_reality}`);
                     }
                 }
                 
-                // 查找最近的 Biome_Zone
-                const nearestBZ = this.findNearestBiomeZone(x, y);
-                if (nearestBZ) {
-                    lines.push(`所属生态区: ${nearestBZ.name} (~${nearestBZ.distance}格)`);
-                    if (nearestBZ.data.visual_texture) {
-                        lines.push(`【视觉纹理】${nearestBZ.data.visual_texture}`);
+                // Biome_Zone 信息
+                if (entities.biomeZone) {
+                    lines.push(`所属生态区: ${entities.biomeZone}`);
+                    const biomeDesc = this.biomeFlavor[entities.biomeZone];
+                    if (biomeDesc) {
+                        if (biomeDesc.visual_texture) lines.push(`【视觉纹理】${biomeDesc.visual_texture}`);
+                        if (biomeDesc.sensory_feed) lines.push(`【感官体验】${biomeDesc.sensory_feed}`);
                     }
-                    if (nearestBZ.data.sensory_feed) {
-                        lines.push(`【感官体验】${nearestBZ.data.sensory_feed}`);
+                } else {
+                    const nearestBZ = this.findNearestBiomeZone(x, y);
+                    if (nearestBZ) {
+                        lines.push(`附近生态区: ${nearestBZ.name} (~${nearestBZ.distance}格)`);
+                        if (nearestBZ.data.visual_texture) lines.push(`【视觉纹理】${nearestBZ.data.visual_texture}`);
+                        if (nearestBZ.data.sensory_feed) lines.push(`【感官体验】${nearestBZ.data.sensory_feed}`);
+                    }
+                }
+                
+                // ========== 点坐标设施 ==========
+                if (entities.pokemonCenter) {
+                    const pcDesc = this.service[entities.pokemonCenter];
+                    lines.push(`【宝可梦中心】${pcDesc?.name || entities.pokemonCenter}`);
+                    if (pcDesc?.desc) lines.push(`  ${pcDesc.desc}`);
+                }
+                if (entities.service) {
+                    const svcDesc = this.service[entities.service];
+                    lines.push(`【服务设施】${svcDesc?.name || entities.service}`);
+                    if (svcDesc?.desc) lines.push(`  ${svcDesc.desc}`);
+                }
+                if (entities.placeAnchor) {
+                    const anchorDesc = this.placeAnchor[entities.placeAnchor];
+                    lines.push(`【场所类型】${entities.placeAnchor}`);
+                    if (anchorDesc?.desc) lines.push(`  ${anchorDesc.desc}`);
+                }
+                if (entities.warp) {
+                    const warpDesc = this.systemWarps[entities.warp];
+                    lines.push(`【传送点】${entities.warp}`);
+                    if (warpDesc?.desc) lines.push(`  ${warpDesc.desc}`);
+                }
+                if (entities.npcActor) {
+                    const npcDesc = this.npcContext[entities.npcActor];
+                    lines.push(`【NPC场景】${entities.npcActor}`);
+                    if (npcDesc?.desc) lines.push(`  ${npcDesc.desc}`);
+                }
+                if (entities.bedRest) {
+                    const bedDesc = this.service[entities.bedRest];
+                    lines.push(`【休息点】${bedDesc?.name || entities.bedRest}`);
+                    if (bedDesc?.desc) lines.push(`  ${bedDesc.desc}`);
+                }
+                if (entities.pcTerminal) {
+                    const pcTermDesc = this.service['PC_Terminal'];
+                    lines.push(`【PC终端】${pcTermDesc?.name || 'Box-Link Terminal'}`);
+                    if (pcTermDesc?.desc) lines.push(`  ${pcTermDesc.desc}`);
+                }
+                if (entities.policeBox) {
+                    const policeDesc = this.service[entities.policeBox];
+                    lines.push(`【警察站】${policeDesc?.name || entities.policeBox}`);
+                    if (policeDesc?.desc) lines.push(`  ${policeDesc.desc}`);
+                }
+                if (entities.transitStation) {
+                    const transitDesc = this.transitInfra[entities.transitStation];
+                    lines.push(`【交通站】${transitDesc?.name || entities.transitStation}`);
+                    if (transitDesc?.desc) lines.push(`  ${transitDesc.desc}`);
+                }
+                if (entities.lavaLine) {
+                    const lavaDesc = this.transitInfra[entities.lavaLine];
+                    lines.push(`【缆车站】${lavaDesc?.name || entities.lavaLine}`);
+                    if (lavaDesc?.desc) lines.push(`  ${lavaDesc.desc}`);
+                }
+                
+                // ========== 附近宝可梦（基于生态区生成）==========
+                if (this.spawnTablesData && entities.biomeZone) {
+                    const pokemonList = this.generateNearbyPokemon(entities.biomeZone);
+                    if (pokemonList && pokemonList.length > 0) {
+                        lines.push('');
+                        lines.push('───────────────────────────────────────');
+                        lines.push('【附近宝可梦】');
+                        for (const poke of pokemonList) {
+                            const levelStr = poke.level ? `Lv.${poke.level}` : '';
+                            const rarityStr = poke.rarity ? `(${poke.rarity})` : '';
+                            lines.push(`  ${poke.id} ${levelStr} ${rarityStr}`);
+                        }
                     }
                 }
                 
@@ -442,6 +612,61 @@
                 lines.push('═══════════════════════════════════════');
                 
                 return lines.join('\n');
+            },
+            
+            // 生成附近宝可梦列表
+            generateNearbyPokemon(biomeZone) {
+                if (!this.spawnTablesData) return [];
+                
+                // 区域名称映射
+                const BIOME_ZONE_MAPPING = {
+                    "Arcadia_Lawns": "Aether_Admin_Zone",
+                    "Zenith_HQ": "Aether_Admin_Zone",
+                    "Pearl_Resort": "Sapphire_Strand",
+                    "Jade_Canopy": "Jade_Canopy",
+                    "Radiant_Plains": "Radiant_Plains",
+                    "Cinder_Moor": "Cinder_Moor",
+                    "Silent_Tundra": "Silent_Tundra",
+                    "Crimson_Badlands": "Crimson_Badlands"
+                };
+                
+                const resolvedZone = BIOME_ZONE_MAPPING[biomeZone] || biomeZone;
+                const zoneTable = this.spawnTablesData[resolvedZone] || this.spawnTablesData['Aether_Admin_Zone'];
+                
+                if (!zoneTable) return [];
+                
+                const results = [];
+                const surfacePool = zoneTable['Standard_Grass'] || zoneTable['Pavement'] || Object.values(zoneTable)[0];
+                
+                if (!surfacePool) return [];
+                
+                // 从 common 池中随机选择 3-4 个
+                const commonPool = surfacePool.common || [];
+                for (let i = 0; i < Math.min(4, commonPool.length); i++) {
+                    const entry = commonPool[Math.floor(Math.random() * commonPool.length)];
+                    const pokemonId = typeof entry === 'string' ? entry : entry.id;
+                    const minLevel = typeof entry === 'object' ? (entry.min || 5) : 5;
+                    results.push({
+                        id: pokemonId,
+                        level: minLevel + Math.floor(Math.random() * 10),
+                        rarity: 'common'
+                    });
+                }
+                
+                // 从 uncommon 池中随机选择 1 个
+                const uncommonPool = surfacePool.uncommon || [];
+                if (uncommonPool.length > 0) {
+                    const entry = uncommonPool[Math.floor(Math.random() * uncommonPool.length)];
+                    const pokemonId = typeof entry === 'string' ? entry : entry.id;
+                    const minLevel = typeof entry === 'object' ? (entry.min || 10) : 10;
+                    results.push({
+                        id: pokemonId,
+                        level: minLevel + Math.floor(Math.random() * 8),
+                        rarity: 'uncommon'
+                    });
+                }
+                
+                return results;
             },
             
             // 获取大区内的地标
