@@ -1134,10 +1134,12 @@ const TacticalSystem = {
         const isPeace = (hoverData.threat === 6 || hoverData.threat === 0 || hoverData.threat === 1);
 
         const headerH = 36;
-        const itemH = 64;
+        const itemH = 56;
+        const itemGap = 6;
         const shouldExpand = !this._pokemonPanelCollapsed;
+        const maxVisibleRows = 2;
         const listH = shouldExpand
-            ? (pokemonList.length > 0 ? pokemonList.length * (itemH + 6) : 60)
+            ? (pokemonList.length > 0 ? (maxVisibleRows * (itemH + itemGap)) + 20 : 60)
             : 0;
         const totalH = headerH + listH + (shouldExpand ? 10 : 0);
 
@@ -1205,59 +1207,71 @@ const TacticalSystem = {
             boss: "#e17055"
         };
 
-        const itemWidth = panelW - 24;
+        const cols = 2;
+        const itemWidth = (panelW - 24 - itemGap) / cols;
         const startX = panelX + 12;
 
-        pokemonList.slice(0, 6).forEach((p, i) => {
-            const rowY = contentY + i * (itemH + 6);
+        pokemonList.slice(0, 8).forEach((p, i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const itemX = startX + col * (itemWidth + itemGap);
+            const itemY = contentY + row * (itemH + itemGap);
 
             ctx.fillStyle = "rgba(0,0,0,0.02)";
             ctx.strokeStyle = "rgba(0,0,0,0.04)";
             ctx.lineWidth = 1;
             if (ctx.roundRect) {
                 ctx.beginPath();
-                ctx.roundRect(startX, rowY, itemWidth, itemH, 8);
+                ctx.roundRect(itemX, itemY, itemWidth, itemH, 6);
                 ctx.fill();
                 ctx.stroke();
             } else {
-                ctx.fillRect(startX, rowY, itemWidth, itemH);
-                ctx.strokeRect(startX, rowY, itemWidth, itemH);
+                ctx.fillRect(itemX, itemY, itemWidth, itemH);
+                ctx.strokeRect(itemX, itemY, itemWidth, itemH);
             }
 
             ctx.fillStyle = "#fff";
             ctx.shadowColor = "rgba(0,0,0,0.05)";
             ctx.shadowBlur = 5;
-            const size = 48;
-            const spriteY = rowY + (itemH - size)/2;
+            const size = 40;
+            const spriteY = itemY + (itemH - size)/2;
             if (ctx.roundRect) {
                 ctx.beginPath();
-                ctx.roundRect(startX + 8, spriteY, size, size, 6);
+                ctx.roundRect(itemX + 6, spriteY, size, size, 4);
                 ctx.fill();
             } else {
-                ctx.fillRect(startX + 8, spriteY, size, size);
+                ctx.fillRect(itemX + 6, spriteY, size, size);
             }
             ctx.shadowBlur = 0;
 
-            this._drawPokemonSprite(ctx, p.id, startX + 8, spriteY, size);
+            this._drawPokemonSprite(ctx, p.id, itemX + 6, spriteY, size);
 
-            const textX = startX + size + 20;
-            const textTop = rowY + 22;
+            const textX = itemX + size + 12;
+            const textTop = itemY + 18;
 
             const pName = p.id.replace(/_/g, ' ').toUpperCase();
+            const maxNameWidth = itemWidth - size - 18;
             ctx.fillStyle = TACTICAL_STYLE.TXT_PRIMARY;
-            ctx.font = "900 13px 'Exo 2', sans-serif";
+            let nameFontSize = 11;
+            ctx.font = `900 ${nameFontSize}px 'Exo 2', sans-serif`;
             ctx.textAlign = "left";
+            let nameWidth = ctx.measureText(pName).width;
+            while (nameWidth > maxNameWidth && nameFontSize > 8) {
+                nameFontSize -= 0.5;
+                ctx.font = `900 ${nameFontSize}px 'Exo 2', sans-serif`;
+                nameWidth = ctx.measureText(pName).width;
+            }
             ctx.fillText(pName, textX, textTop);
 
             const rarityColor = rarityColors[p.rarity] || TACTICAL_STYLE.TXT_SECONDARY;
             ctx.fillStyle = rarityColor;
-            ctx.font = "700 9px 'Exo 2', sans-serif";
-            ctx.fillText((p.rarity || "---").toUpperCase(), textX, textTop + 12);
+            ctx.font = "700 8px 'Exo 2', sans-serif";
+            ctx.fillText((p.rarity || "---").toUpperCase(), textX, textTop + 11);
 
             ctx.textAlign = "right";
             ctx.fillStyle = TACTICAL_STYLE.ACCENT_WARN;
-            ctx.font = "900 14px 'Chakra Petch', monospace";
-            ctx.fillText(`Lv.${p.level}`, startX + itemWidth - 12, rowY + itemH/2 + 5);
+            ctx.font = "900 11px 'Chakra Petch', monospace";
+            ctx.fillText(`Lv.${p.level}`, itemX + itemWidth - 6, itemY + itemH/2 + 4);
         });
         ctx.textAlign = "left";
     },

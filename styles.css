@@ -3766,7 +3766,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(10, 15, 25, 0.97);
+    background: #f8f9fa;
     z-index: 9999;
     display: none;
     flex-direction: column;
@@ -3783,16 +3783,17 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 10px 16px;
-    background: linear-gradient(90deg, #1a1a2e, #16213e);
-    border-bottom: 2px solid #3498db;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border-bottom: 2px solid #0984e3;
     flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .map-modal-title {
     font-family: var(--font-ui);
     font-size: 0.85rem;
     font-weight: 800;
-    color: #ecf0f1;
+    color: #2d3436;
     letter-spacing: 2px;
     text-transform: uppercase;
 }
@@ -3800,8 +3801,8 @@ body {
 .map-modal-close {
     width: 28px;
     height: 28px;
-    background: rgba(231, 76, 60, 0.2);
-    border: 1px solid rgba(231, 76, 60, 0.4);
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3);
     border-radius: 4px;
     color: #e74c3c;
     font-size: 1rem;
@@ -3813,8 +3814,9 @@ body {
 }
 
 .map-modal-close:hover {
-    background: rgba(231, 76, 60, 0.4);
+    background: rgba(231, 76, 60, 0.2);
     border-color: #e74c3c;
+    transform: scale(1.05);
 }
 
 #map-iframe {
