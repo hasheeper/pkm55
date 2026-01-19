@@ -72,22 +72,25 @@ const TRAV_MAP = {
 
 // --- 🎨 现代可视化配置 ---
 const TACTICAL_STYLE = {
-    // 巨大化尺寸：便于阅读微型标识
-    TILE_SIZE: 180, 
-    VIEW_RADIUS: 5,  // 半径缩小，专注于局部细节
-    
-    // 物理
+    TILE_SIZE: 180,
+    VIEW_RADIUS: 5,
     DRAG_FRICTION: 0.12,
 
-    // 调色板 (Clean White Theme)
-    COLOR_BG:   "#eef2f5", // 屏幕大背景(淡灰)
-    CARD_BASE:  "#ffffff", // 卡片白底
-    CARD_SHADOW:"rgba(200, 210, 230, 0.4)",
-    
-    // UI Colors
-    ACCENT_PLAYER: "#3498db", // 玩家位置高亮颜色
-    TXT_PRIMARY:   "#2c3e50",
-    TXT_SECONDARY: "#95a5a6",
+    // Ver. Dawn Palette
+    COLOR_BG: "#f2f4f8",
+    CARD_BASE: "rgba(255, 255, 255, 0.95)",
+    TXT_PRIMARY: "#2d3436",
+    TXT_SECONDARY: "#b2bec3",
+    ACCENT_CYAN: "#00cec9",
+    ACCENT_BLUE: "#74b9ff",
+    ACCENT_WARN: "#fdcb6e",
+    ACCENT_CRIT: "#dfe6e930",
+
+    // Typography + legacy compatibility
+    FONT_UI: "700 12px 'Exo 2', sans-serif",
+    FONT_HEAD: "900 14px 'Exo 2', sans-serif",
+    FONT_NUM: "700 12px 'Chakra Petch', monospace",
+    ACCENT_PLAYER: "#00cec9",
 };
 
 // 辅助：获取特定层ID (IntGrid)
@@ -929,178 +932,168 @@ const TacticalSystem = {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         const threatInfo = THREAT_MAP[d.threat] || THREAT_MAP[0];
-        const metrics = [
-            { label: "REGION", value: d.regionName, color: d.regionName === "UNDEFINED" ? "#bdc3c7" : "#2c3e50" },
-            { label: "BIOME",  value: d.biomeName,  color: "#16a085" },
-            { label: "THREAT", value: threatInfo.label, color: threatInfo.color },
-            { label: "SURFACE",value: d.surfaceName, color: "#34495e" },
-            { label: "INFRA",  value: d.infraText,  color: d.infraText === "YES" ? "#e67e22" : "#95a5a6" },
-            { label: "BLOCK",  value: d.obsText,    color: d.obsText === "BLOCK" ? "#c0392b" : null },
-            { label: "MOVE",   value: d.travText,   color: d.travText === "CLOSED" ? "#c0392b" : null },
-            { label: "TUNNEL", value: d.tunnelText, color: d.tunnelText === "FOUND" ? "#8e44ad" : null }
-        ];
+        let regionNameDisplay = getIntGridTextName("Regions", d.regionInt) || "WILDERNESS";
+        regionNameDisplay = formatZoneName(regionNameDisplay).toUpperCase();
+        const regionZoneNameRaw = getEntZoneName('Region_Zone', d.gx, d.gy);
+        const regionZoneName = (formatZoneName(regionZoneNameRaw) || "LOCAL GRID").toUpperCase();
+
+        const PADDING = 16;
+        const PANEL_W = isMobile ? width - 30 : 320;
+        const PANEL_X = isMobile ? 15 : width - PANEL_W - 20;
+        const PANEL_Y = 15;
+
+        const HEADER_H = 42;
+        const BODY_H = this._infoPanelCollapsed ? 0 : 100;
+        const TOTAL_H = HEADER_H + BODY_H + (this._infoPanelCollapsed ? 0 : 10);
+
+        const C_BG = "rgba(255, 255, 255, 0.96)";
+        const C_TEXT = "#2d3436";
+        const C_SUB = "#b2bec3";
+        const C_LINE = "rgba(0,0,0,0.06)";
+        const C_ACCENT = threatInfo.color || "#0984e3";
 
         ctx.save();
 
-        if (isMobile) {
-            const panelX = 8;
-            const panelW = width - 16;
-            const headerH = 32;
-            const contentH = 108;
-            const panelH = this._infoPanelCollapsed ? headerH : (headerH + contentH);
-            
-            // 面板背景
-            ctx.fillStyle = "rgba(255,255,255,0.96)";
-            ctx.shadowColor = "rgba(0,0,0,0.15)";
-            ctx.shadowBlur = 10;
+        ctx.shadowColor = "rgba(0,0,0,0.08)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 4;
+        ctx.fillStyle = C_BG;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(PANEL_X, PANEL_Y, PANEL_W, TOTAL_H, 8);
+        else ctx.rect(PANEL_X, PANEL_Y, PANEL_W, TOTAL_H);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        const STRIPE_W = 6;
+        ctx.fillStyle = C_ACCENT;
+        ctx.beginPath();
+        const stripeY = PANEL_Y + 10;
+        const stripeH = HEADER_H - 10;
+        if (ctx.roundRect) ctx.roundRect(PANEL_X, stripeY, STRIPE_W, stripeH, [0, 4, 4, 0]);
+        else ctx.fillRect(PANEL_X, stripeY, STRIPE_W, stripeH);
+        ctx.fill();
+
+        const MAP_CENTER_X = 26; const MAP_CENTER_Y = 26;
+        let coordsX = d.gx - MAP_CENTER_X; if (coordsX >= 0) coordsX += 1;
+        let coordsY = MAP_CENTER_Y - d.gy - 1; if (coordsY >= 0) coordsY += 1;
+        let quad = "?";
+        if (coordsX > 0 && coordsY > 0) quad = "S";
+        else if (coordsX < 0 && coordsY > 0) quad = "A";
+        else if (coordsX < 0 && coordsY < 0) quad = "B";
+        else if (coordsX > 0 && coordsY < 0) quad = "N";
+
+        const arrow = this._infoPanelCollapsed ? "▶" : "▼";
+        ctx.fillStyle = C_ACCENT;
+        ctx.font = "bold 12px sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        const headerMidY = PANEL_Y + (HEADER_H / 2);
+        ctx.fillText(arrow, PANEL_X + 18, headerMidY);
+
+        ctx.fillStyle = C_TEXT;
+        ctx.font = "700 22px 'Chakra Petch', 'Arial Black', sans-serif";
+        const coordText = `[${coordsX}, ${coordsY}]`;
+        ctx.fillText(coordText, PANEL_X + 34, headerMidY + 2);
+
+        const cxWidth = ctx.measureText(coordText).width;
+        const tagX = PANEL_X + 34 + cxWidth + 8;
+        ctx.fillStyle = C_TEXT;
+        if (ctx.roundRect) {
             ctx.beginPath();
-            if (ctx.roundRect) {
-                ctx.roundRect(panelX, 8, panelW, panelH, 8);
-            } else {
-                ctx.rect(panelX, 8, panelW, panelH);
-            }
+            ctx.roundRect(tagX, PANEL_Y + 12, 24, 18, 4);
             ctx.fill();
-            ctx.shadowBlur = 0;
-
-            // 使用 game.js 中的坐标转换函数（跳过0轴，Y轴反转）
-            const MAP_CENTER_X = 26;
-            const MAP_CENTER_Y = 26;
-            let displayX = d.gx - MAP_CENTER_X;
-            if (displayX >= 0) displayX += 1;
-            let displayY = MAP_CENTER_Y - d.gy - 1;
-            if (displayY >= 0) displayY += 1;
-            
-            let quadrant = "?";
-            if (displayX > 0 && displayY > 0) quadrant = "S";
-            else if (displayX < 0 && displayY > 0) quadrant = "A";
-            else if (displayX < 0 && displayY < 0) quadrant = "B";
-            else if (displayX > 0 && displayY < 0) quadrant = "N";
-            
-            // 标题栏（可折叠）
-            const arrow = this._infoPanelCollapsed ? "▶" : "▼";
-            ctx.fillStyle = "#2c3e50";
-            ctx.textAlign = "left";
-            ctx.font = "800 20px 'Inter', sans-serif";
-            ctx.fillText(`${arrow} [${displayX}, ${displayY}] ${quadrant}`, panelX + 12, 30);
-            
-            // 保存标题栏点击区域
-            this._infoPanelHeaderRect = { x: panelX, y: 8, w: panelW, h: headerH };
-            
-            // 如果折叠则跳过内容
-            if (!this._infoPanelCollapsed) {
-                ctx.font = "600 9px monospace";
-                ctx.fillStyle = "#95a5a6";
-                ctx.fillText("GRID::REF", panelX + 16, 48);
-
-                const regionLayerId = 1;
-                const regionMap = window.intGridInfoMap && window.intGridInfoMap[regionLayerId];
-                const regionInfo = regionMap && regionMap[d.regionInt];
-                const regionColor = regionInfo?.color || "#bdc3c7";
-
-                const regionTextName = getIntGridTextName("Regions", d.regionInt);
-                const displayRegion = (regionTextName ? regionTextName : "WILDERNESS").toUpperCase();
-
-                ctx.fillStyle = regionColor;
-                ctx.fillRect(panelX + 16, 60, 6, 6);
-
-                ctx.fillStyle = "#2c3e50";
-                ctx.font = "800 12px sans-serif";
-                ctx.fillText(displayRegion, panelX + 28, 67);
-
-                ctx.fillStyle = "#dfe6e9";
-                ctx.fillRect(panelX + 110, 45, 1, 85);
-
-                const startX = panelX + 125;
-                const startY = 50;
-                const cols = 4;
-                const colW = (panelW - 140) / cols;
-                const rowGap = 40;
-
-                ctx.textAlign = "left";
-                for (let i = 0; i < metrics.length; i++) {
-                    const item = metrics[i];
-                    const row = Math.floor(i / cols);
-                    const col = i % cols;
-                    const px = startX + col * colW;
-                    const py = startY + row * rowGap;
-
-                    ctx.fillStyle = "#bdc3c7";
-                    ctx.font = "bold 8px sans-serif";
-                    ctx.fillText(item.label, px, py);
-
-                    ctx.fillStyle = item.color || "#2c3e50";
-                    ctx.font = "bold 12px 'Helvetica Neue'";
-                    ctx.fillText(shortenValue(item.value, 8), px, py + 14);
-                }
-            }
-
-            ctx.fillStyle = threatInfo.color;
-            ctx.fillRect(panelX, 8 + panelH - 4, panelW, 4);
-            
-            // ========== 宝可梦显示区域 ==========
-            this._drawPokemonPanel(ctx, panelX, 8 + panelH + 8, panelW, d);
         } else {
-            const pW = 240;
-            const ox = width - pW - 20;
-            const oy = 20;
-            const cardH = 360;
+            ctx.fillRect(tagX, PANEL_Y + 12, 24, 18);
+        }
 
-            ctx.fillStyle = "rgba(255,255,255,0.95)";
-            ctx.strokeStyle = "rgba(0,0,0,0.05)";
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 12px 'Exo 2', sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(quad, tagX + 12, PANEL_Y + 21);
+
+        this._infoPanelHeaderRect = { x: PANEL_X, y: PANEL_Y, w: PANEL_W, h: HEADER_H };
+
+        if (!this._infoPanelCollapsed) {
+            const lineY = PANEL_Y + HEADER_H;
+            ctx.strokeStyle = C_LINE;
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.roundRect(ox, oy, pW, cardH, 10);
-            ctx.fill();
+            ctx.moveTo(PANEL_X + 10, lineY);
+            ctx.lineTo(PANEL_X + PANEL_W - 10, lineY);
             ctx.stroke();
 
-            ctx.fillStyle = "#ecf0f1";
-            ctx.fillRect(ox, oy, pW, 80);
-            // 使用 game.js 中的坐标转换函数（跳过0轴，Y轴反转）
-            const MAP_CENTER_X_2 = 26;
-            const MAP_CENTER_Y_2 = 26;
-            // X轴：简单减法，跳过0
-            let displayX_2 = d.gx - MAP_CENTER_X_2;
-            if (displayX_2 >= 0) displayX_2 += 1;
-            
-            // Y轴：26 - gy - 1，然后跳过0
-            let displayY_2 = MAP_CENTER_Y_2 - d.gy - 1;
-            if (displayY_2 >= 0) displayY_2 += 1;
-            
-            let quadrant_2 = "?";
-            if (displayX_2 > 0 && displayY_2 > 0) quadrant_2 = "S"; // 东北
-            else if (displayX_2 < 0 && displayY_2 > 0) quadrant_2 = "A"; // 西北
-            else if (displayX_2 < 0 && displayY_2 < 0) quadrant_2 = "B"; // 西南
-            else if (displayX_2 > 0 && displayY_2 < 0) quadrant_2 = "N"; // 东南
-            
-            ctx.fillStyle = "#2c3e50";
-            ctx.font = "bold 36px 'Helvetica Neue'";
-            ctx.textAlign = "center";
-            ctx.fillText(`[${displayX_2}, ${displayY_2}] ${quadrant_2}`, ox + pW/2, oy + 50);
+            const DIVIDER_X = PANEL_X + (PANEL_W * 0.32);
+            ctx.beginPath();
+            ctx.moveTo(DIVIDER_X, lineY + 10);
+            ctx.lineTo(DIVIDER_X, lineY + BODY_H - 10);
+            ctx.stroke();
 
-            ctx.fillStyle = "#7f8c8d";
-            ctx.font = "10px sans-serif";
-            ctx.fillText("GRID DESIGNATOR", ox + pW/2, oy + 65);
-
-            let currY = oy + 110;
+            const leftCtxX = PANEL_X + PADDING;
+            const leftLabelY = lineY + 25;
+            ctx.fillStyle = C_SUB;
+            ctx.font = "800 9px 'Exo 2', sans-serif";
             ctx.textAlign = "left";
-            metrics.forEach(item => {
-                ctx.fillStyle = "#95a5a6";
-                ctx.font = "bold 10px sans-serif";
-                ctx.fillText(item.k, ox + 25, currY);
+            ctx.fillText("SECTOR ASSIGNMENT", leftCtxX, leftLabelY);
 
-                ctx.textAlign = "right";
-                ctx.fillStyle = item.c || "#2c3e50";
-                ctx.font = item.v && item.v.length > 15 ? "bold 11px sans-serif" : "bold 13px sans-serif";
-                ctx.fillText(item.v || "---", ox + pW - 25, currY);
+            ctx.fillStyle = C_TEXT;
+            let fontSize = 24;
+            ctx.font = `900 ${fontSize}px 'Exo 2', sans-serif`;
+            let rW = ctx.measureText(regionNameDisplay).width;
+            const maxW = (DIVIDER_X - leftCtxX) - 10;
+            if (rW > maxW) {
+                fontSize = fontSize * (maxW / rW);
+                ctx.font = `900 ${fontSize}px 'Exo 2', sans-serif`;
+            }
+            const leftCenterY = lineY + (BODY_H / 2);
+            ctx.fillText(regionNameDisplay, leftCtxX, leftCenterY);
 
-                ctx.textAlign = "left";
-                ctx.strokeStyle = "#f1f2f6";
-                ctx.beginPath();
-                ctx.moveTo(ox + 25, currY + 6);
-                ctx.lineTo(ox + pW - 25, currY + 6);
-                ctx.stroke();
-                currY += 34;
+            ctx.font = "700 10px 'Chakra Petch', monospace";
+            ctx.fillStyle = C_ACCENT;
+            ctx.fillText(`STATUS: ${(threatInfo.label || 'ANALYZING').toUpperCase()}`, leftCtxX, lineY + BODY_H - 15);
+
+            const rightCtxX = DIVIDER_X + 12;
+            const rowH = 26;
+            const startY = lineY + 18;
+            const gridW = PANEL_W - (DIVIDER_X - PANEL_X) - 18;
+            const colW = gridW / 2;
+
+            const gridData = [
+                { k: "BIOME",   v: d.biomeName || "-", c: "#00b894" },
+                { k: "INFRA",   v: d.infraText || "NO", c: d.infraText === "YES" ? "#e67e22" : null },
+                { k: "SURFACE", v: d.surfaceName || "-" },
+                { k: "MOVE",    v: d.travText || "OPEN", c: d.travText !== "OPEN" ? "#ff7675" : null },
+                { k: "ZONE",    v: regionZoneName },
+                { k: "TUNNEL",  v: d.tunnelText || "NULL", c: "#9b59b6" }
+            ];
+
+            gridData.forEach((item, i) => {
+                const r = Math.floor(i / 2);
+                const c = i % 2;
+                const tx = rightCtxX + c * colW;
+                const ty = startY + r * rowH;
+
+                ctx.fillStyle = C_SUB;
+                ctx.font = "bold 8px 'Exo 2', sans-serif";
+                ctx.fillText(item.k, tx, ty);
+
+                ctx.fillStyle = item.c || "#535c68";
+                let valFont = 11;
+                let valueText = (item.v || "-").toString().toUpperCase();
+                let available = colW - 8;
+                ctx.font = `700 ${valFont}px 'Chakra Petch', monospace`;
+                let textWidth = ctx.measureText(valueText).width;
+                while (textWidth > available && valFont > 8) {
+                    valFont -= 1;
+                    ctx.font = `700 ${valFont}px 'Chakra Petch', monospace`;
+                    textWidth = ctx.measureText(valueText).width;
+                }
+                ctx.fillText(valueText, tx, ty + 12);
             });
+        }
+
+        if (typeof this._drawPokemonPanel === 'function') {
+            const gap = 12;
+            this._drawPokemonPanel(ctx, PANEL_X, PANEL_Y + TOTAL_H + gap, PANEL_W, d);
         }
 
         ctx.restore();
@@ -1124,7 +1117,6 @@ const TacticalSystem = {
     },
     
     _drawPokemonPanel: function(ctx, panelX, panelY, panelW, hoverData) {
-        // 获取位置信息 - 使用原始值而非显示文本
         const locationInfo = {
             gx: hoverData.gx,
             gy: hoverData.gy,
@@ -1132,135 +1124,142 @@ const TacticalSystem = {
             surfaceType: hoverData.surfaceTypeRaw || hoverData.surfaceName || 'Unknown',
             biomeZone: hoverData.biomeZoneRaw || hoverData.biomeName || 'Unknown'
         };
-        
-        // 从缓存获取宝可梦列表
+
         let pokemonList = [];
         if (window.PokemonSpawnCache) {
-            pokemonList = window.PokemonSpawnCache.getForLocation(locationInfo);
+            pokemonList = window.PokemonSpawnCache.getForLocation(locationInfo) || [];
         }
-        
-        // 威胁度名称
-        const threatNames = { 0: '未知', 1: '安全', 2: '低威胁', 3: '中威胁', 4: '高威胁', 5: '极危', 6: '和平' };
-        const isPeace = hoverData.threat === 6 || hoverData.threat === 0;
-        
-        // 面板高度
-        const headerH = 28;
-        const itemH = 44;
-        const listH = this._pokemonPanelCollapsed ? 0 : (isPeace ? 50 : Math.min(pokemonList.length, 5) * itemH);
-        const totalH = headerH + listH + (this._pokemonPanelCollapsed ? 0 : 8);
-        
-        // 绘制面板背景
-        ctx.save();
-        ctx.fillStyle = "rgba(30, 40, 55, 0.95)";
-        ctx.shadowColor = "rgba(0,0,0,0.3)";
-        ctx.shadowBlur = 10;
+
+        const threatMap = { 0:'UNKNOWN', 1:'SAFE', 2:'LOW', 3:'MID', 4:'HIGH', 5:'APEX', 6:'PEACE' };
+        const isPeace = (hoverData.threat === 6 || hoverData.threat === 0 || hoverData.threat === 1);
+
+        const headerH = 36;
+        const itemH = 64;
+        const shouldExpand = !this._pokemonPanelCollapsed;
+        const listH = shouldExpand
+            ? (pokemonList.length > 0 ? pokemonList.length * (itemH + 6) : 60)
+            : 0;
+        const totalH = headerH + listH + (shouldExpand ? 10 : 0);
+
+        ctx.fillStyle = TACTICAL_STYLE.CARD_BASE;
+        ctx.shadowColor = "rgba(0,0,0,0.05)";
+        ctx.shadowBlur = 15;
         ctx.beginPath();
-        if (ctx.roundRect) {
-            ctx.roundRect(panelX, panelY, panelW, totalH, 8);
-        } else {
-            ctx.rect(panelX, panelY, panelW, totalH);
-        }
+        if (ctx.roundRect) ctx.roundRect(panelX, panelY, panelW, totalH, 12);
+        else ctx.rect(panelX, panelY, panelW, totalH);
         ctx.fill();
         ctx.shadowBlur = 0;
-        
-        // 绘制标题栏（可点击折叠）
-        ctx.fillStyle = "#3498db";
+
+        const arrow = this._pokemonPanelCollapsed ? "▶" : "▼";
+        const iconColor = pokemonList.length > 0 ? "#ff7675" : "#55efc4";
+        ctx.fillStyle = iconColor;
         ctx.beginPath();
-        if (ctx.roundRect) {
-            const radius = this._pokemonPanelCollapsed ? 8 : [8, 8, 0, 0];
-            ctx.roundRect(panelX, panelY, panelW, headerH, radius);
-        } else {
-            ctx.rect(panelX, panelY, panelW, headerH);
-        }
+        ctx.arc(panelX + 20, panelY + headerH/2, 3, 0, Math.PI*2);
         ctx.fill();
-        
-        // 折叠箭头
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 11px sans-serif";
+
+        ctx.fillStyle = TACTICAL_STYLE.TXT_PRIMARY;
+        ctx.font = "900 12px 'Exo 2', sans-serif";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        const arrow = this._pokemonPanelCollapsed ? "▶" : "▼";
-        ctx.fillText(arrow + " 附近的宝可梦", panelX + 8, panelY + headerH / 2);
-        
-        // 威胁度标签
-        const threatName = threatNames[hoverData.threat] || '未知';
+        ctx.fillText(`${arrow}  ENTITY SCAN`, panelX + 30, panelY + headerH/2 + 1);
+
+        const threatLabel = threatMap[hoverData.threat] || "???";
+        const threatColor = (THREAT_MAP[hoverData.threat]?.color) || TACTICAL_STYLE.TXT_SECONDARY;
+        ctx.font = "900 10px 'Exo 2', sans-serif";
         ctx.textAlign = "right";
-        ctx.font = "10px sans-serif";
-        ctx.fillStyle = isPeace ? "#2ecc71" : "#f1c40f";
-        ctx.fillText(threatName, panelX + panelW - 12, panelY + headerH / 2);
-        
-        ctx.textAlign = "left";
-        
-        // 保存点击区域用于折叠
+        ctx.fillStyle = threatColor;
+        ctx.fillText(`${threatLabel}`, panelX + panelW - 30, panelY + headerH/2 + 1);
+        ctx.beginPath();
+        ctx.arc(panelX + panelW - 20, panelY + headerH/2, 2, 0, Math.PI*2);
+        ctx.fill();
+
         this._pokemonPanelHeaderRect = { x: panelX, y: panelY, w: panelW, h: headerH };
-        
-        // 如果折叠则不绘制内容
-        if (this._pokemonPanelCollapsed) {
-            ctx.restore();
+
+        if (!shouldExpand) {
+            ctx.textAlign = "left";
             return;
         }
-        
-        // 内容区域起始Y
-        let contentY = panelY + headerH + 6;
-        
-        if (isPeace || pokemonList.length === 0) {
-            // 和平区域或无宝可梦
-            ctx.fillStyle = "#7f8c8d";
-            ctx.font = "12px sans-serif";
+
+        ctx.strokeStyle = "rgba(0,0,0,0.06)";
+        ctx.beginPath();
+        ctx.moveTo(panelX, panelY + headerH);
+        ctx.lineTo(panelX + panelW, panelY + headerH);
+        ctx.stroke();
+
+        let contentY = panelY + headerH + 10;
+        ctx.textAlign = "left";
+
+        if (pokemonList.length === 0) {
+            ctx.fillStyle = TACTICAL_STYLE.TXT_SECONDARY;
+            ctx.font = "italic 700 12px 'Exo 2', sans-serif";
             ctx.textAlign = "center";
-            ctx.fillText("这里很安全，没有野生宝可梦", panelX + panelW / 2, contentY + 20);
+            ctx.fillText(isPeace ? "NO HOSTILE SIGNATURES" : "SCAN RETURNS NULL", panelX + panelW/2, contentY + 25);
             ctx.textAlign = "left";
-        } else {
-            // 绘制宝可梦列表
-            const rarityColors = {
-                common: "#95a5a6",
-                uncommon: "#2ecc71",
-                rare: "#3498db",
-                boss: "#e74c3c"
-            };
-            
-            pokemonList.slice(0, 5).forEach((p, i) => {
-                const itemY = contentY + i * itemH;
-                
-                // 图片区域
-                const imgSize = 40;
-                const imgX = panelX + 6;
-                const imgY = itemY + (itemH - imgSize) / 2;
-                
-                // 绘制图片背景
-                ctx.fillStyle = "rgba(255,255,255,0.1)";
-                ctx.beginPath();
-                if (ctx.roundRect) {
-                    ctx.roundRect(imgX, imgY, imgSize, imgSize, 6);
-                } else {
-                    ctx.rect(imgX, imgY, imgSize, imgSize);
-                }
-                ctx.fill();
-
-                // 加载并绘制图片
-                this._drawPokemonSprite(ctx, p.id, imgX + 2, imgY + 2, imgSize - 4);
-
-                // 名称
-                ctx.fillStyle = rarityColors[p.rarity] || "#ffffff";
-                ctx.font = "bold 12px sans-serif";
-                const displayName = p.id.replace(/_/g, ' ');
-                ctx.fillText(displayName.charAt(0).toUpperCase() + displayName.slice(1), panelX + 54, itemY + 16);
-
-                // 稀有度
-                ctx.fillStyle = "#7f8c8d";
-                ctx.font = "9px sans-serif";
-                ctx.fillText(p.rarity.toUpperCase(), panelX + 54, itemY + 30);
-                
-                // 等级
-                ctx.fillStyle = "#f1c40f";
-                ctx.font = "bold 12px sans-serif";
-                ctx.textAlign = "right";
-                ctx.fillText(`Lv.${p.level}`, panelX + panelW - 12, itemY + 20);
-                ctx.textAlign = "left";
-            });
+            return;
         }
-        
-        ctx.restore();
+
+        const rarityColors = {
+            common: "#b2bec3",
+            uncommon: "#00b894",
+            rare: "#0984e3",
+            boss: "#e17055"
+        };
+
+        const itemWidth = panelW - 24;
+        const startX = panelX + 12;
+
+        pokemonList.slice(0, 6).forEach((p, i) => {
+            const rowY = contentY + i * (itemH + 6);
+
+            ctx.fillStyle = "rgba(0,0,0,0.02)";
+            ctx.strokeStyle = "rgba(0,0,0,0.04)";
+            ctx.lineWidth = 1;
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(startX, rowY, itemWidth, itemH, 8);
+                ctx.fill();
+                ctx.stroke();
+            } else {
+                ctx.fillRect(startX, rowY, itemWidth, itemH);
+                ctx.strokeRect(startX, rowY, itemWidth, itemH);
+            }
+
+            ctx.fillStyle = "#fff";
+            ctx.shadowColor = "rgba(0,0,0,0.05)";
+            ctx.shadowBlur = 5;
+            const size = 48;
+            const spriteY = rowY + (itemH - size)/2;
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(startX + 8, spriteY, size, size, 6);
+                ctx.fill();
+            } else {
+                ctx.fillRect(startX + 8, spriteY, size, size);
+            }
+            ctx.shadowBlur = 0;
+
+            this._drawPokemonSprite(ctx, p.id, startX + 8, spriteY, size);
+
+            const textX = startX + size + 20;
+            const textTop = rowY + 22;
+
+            const pName = p.id.replace(/_/g, ' ').toUpperCase();
+            ctx.fillStyle = TACTICAL_STYLE.TXT_PRIMARY;
+            ctx.font = "900 13px 'Exo 2', sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(pName, textX, textTop);
+
+            const rarityColor = rarityColors[p.rarity] || TACTICAL_STYLE.TXT_SECONDARY;
+            ctx.fillStyle = rarityColor;
+            ctx.font = "700 9px 'Exo 2', sans-serif";
+            ctx.fillText((p.rarity || "---").toUpperCase(), textX, textTop + 12);
+
+            ctx.textAlign = "right";
+            ctx.fillStyle = TACTICAL_STYLE.ACCENT_WARN;
+            ctx.font = "900 14px 'Chakra Petch', monospace";
+            ctx.fillText(`Lv.${p.level}`, startX + itemWidth - 12, rowY + itemH/2 + 5);
+        });
+        ctx.textAlign = "left";
     },
     
     _drawPokemonSprite: function(ctx, pokemonId, x, y, size) {

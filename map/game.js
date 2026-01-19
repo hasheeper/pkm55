@@ -1289,10 +1289,24 @@ function hexToRgba(hex,a) {
 }
 
 function updatePlayerCoordsUI() {
-    if(!playerCoordsEl) return;
+    const el = playerCoordsEl || document.getElementById('ui-coords');
+    if(!el) return;
+
     const display = toDisplayCoords(playerState.gx, playerState.gy);
-    const quadrant = getQuadrantName(display.x, display.y);
-    playerCoordsEl.innerText = `[${display.x}, ${display.y}] ${quadrant}`;
+    const quadShort = getQuadrantName(display.x, display.y);
+    const quadDisplay = quadShort === '?' ? '-' : quadShort;
+
+    el.innerHTML = `
+        <div class="hud-coords-container">
+            <span class="coord-axis">X</span>
+            <span class="coord-num">${display.x}</span>
+            <span style="width:6px"></span>
+            <span class="coord-axis">Y</span>
+            <span class="coord-num">${display.y}</span>
+            <span class="quad-tag">${quadDisplay}</span>
+        </div>
+    `;
+    playerCoordsEl = el;
 }
 
 function toggleTacticalMode() {
@@ -1354,13 +1368,16 @@ window.modifyZoom = function(delta) {
 
 const RouteSystem = {
     isPanelVisible: false,
+    isExpanded: false,
     markers: [],
     dom: {
         panel: null,
         list: null,
         dist: null,
         risk: null,
-        legs: null
+        legs: null,
+        summary: null,
+        expandIcon: null
     },
 
     init() {
@@ -1369,6 +1386,8 @@ const RouteSystem = {
         this.dom.dist = document.getElementById('route-dist');
         this.dom.risk = document.getElementById('route-risk');
         this.dom.legs = document.getElementById('route-legs');
+        this.dom.summary = document.getElementById('route-summary');
+        this.dom.expandIcon = document.getElementById('expand-icon');
         this.reset();
     },
 
@@ -1384,6 +1403,18 @@ const RouteSystem = {
             if(this.markers.length === 0) this.reset();
         } else {
             this.dom.panel.classList.add('hidden');
+            this.isExpanded = false;
+            this.dom.panel.classList.remove('expanded');
+        }
+    },
+
+    toggleExpand() {
+        this.ensureDom();
+        this.isExpanded = !this.isExpanded;
+        if(this.isExpanded) {
+            this.dom.panel.classList.add('expanded');
+        } else {
+            this.dom.panel.classList.remove('expanded');
         }
     },
 
@@ -1481,6 +1512,13 @@ const RouteSystem = {
         }
         risk.textContent = riskText;
         risk.style.color = riskColor;
+
+        // Update summary in header
+        const summary = this.dom.summary;
+        if(summary) {
+            const legCount = Math.max(0, this.markers.length - 1);
+            summary.textContent = legCount === 0 ? 'NO ROUTE' : `${legCount} LEG${legCount > 1 ? 'S' : ''}`;
+        }
     },
 
     drawGridOverlay(ctxRef) {
