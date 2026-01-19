@@ -586,6 +586,79 @@
                     }
                 }
                 
+                // ========== 周围环境（半径2格）==========
+                lines.push('');
+                lines.push('───────────────────────────────────────');
+                lines.push('【周围环境】(半径2格)');
+                
+                const surrounding = this.getSurroundingInfo(internal.gx, internal.gy, 2);
+                
+                // 按地表类型分组
+                const surfaceGrouped = {};
+                // 按设施区分组
+                const regionZoneGrouped = {};
+                // 收集特殊设施
+                const facilities = [];
+                
+                for (const s of surrounding) {
+                    if (s.surface === null) continue;
+                    
+                    // 地表分组
+                    const surfKey = `${s.surface}${s.traversable ? '' : '(不可通行)'}`;
+                    if (!surfaceGrouped[surfKey]) surfaceGrouped[surfKey] = [];
+                    surfaceGrouped[surfKey].push(s.direction);
+                    
+                    // 设施区分组（只显示与当前不同的）
+                    if (s.regionZone && s.regionZone !== entities.regionZone) {
+                        if (!regionZoneGrouped[s.regionZone]) regionZoneGrouped[s.regionZone] = [];
+                        regionZoneGrouped[s.regionZone].push(s.direction);
+                    }
+                    
+                    // 收集特殊设施
+                    if (s.pokemonCenter) facilities.push({ dir: s.direction, type: 'PC', name: s.pokemonCenter });
+                    if (s.service) facilities.push({ dir: s.direction, type: '商店', name: s.service });
+                    if (s.placeAnchor) facilities.push({ dir: s.direction, type: '场所', name: s.placeAnchor });
+                    if (s.warp) facilities.push({ dir: s.direction, type: '传送', name: s.warp });
+                    if (s.npcActor) facilities.push({ dir: s.direction, type: 'NPC', name: s.npcActor });
+                    if (s.bedRest) facilities.push({ dir: s.direction, type: '休息', name: s.bedRest });
+                    if (s.pcTerminal) facilities.push({ dir: s.direction, type: 'PC终端', name: 'PC_Terminal' });
+                    if (s.policeBox) facilities.push({ dir: s.direction, type: '警察', name: s.policeBox });
+                    if (s.transitStation) facilities.push({ dir: s.direction, type: '交通', name: s.transitStation });
+                    if (s.lavaLine) facilities.push({ dir: s.direction, type: '缆车', name: s.lavaLine });
+                }
+                
+                // 显示地表
+                if (Object.keys(surfaceGrouped).length === 0) {
+                    lines.push('  (位于地图边缘，周围信息有限)');
+                } else {
+                    for (const [terrain, dirs] of Object.entries(surfaceGrouped)) {
+                        lines.push(`  ${dirs.join('、')}: ${terrain}`);
+                    }
+                }
+                
+                // 显示周围不同的设施区
+                if (Object.keys(regionZoneGrouped).length > 0) {
+                    lines.push('  [周围设施区]');
+                    for (const [zone, dirs] of Object.entries(regionZoneGrouped)) {
+                        lines.push(`    ${dirs.join('、')}: ${zone}`);
+                    }
+                }
+                
+                // 显示周围特殊设施
+                if (facilities.length > 0) {
+                    lines.push('  [周围设施]');
+                    // 合并相同类型和名称的设施
+                    const facilityGrouped = {};
+                    for (const f of facilities) {
+                        const key = `${f.type}:${f.name}`;
+                        if (!facilityGrouped[key]) facilityGrouped[key] = { type: f.type, name: f.name, dirs: [] };
+                        facilityGrouped[key].dirs.push(f.dir);
+                    }
+                    for (const f of Object.values(facilityGrouped)) {
+                        lines.push(`    ${f.dirs.join('、')}: [${f.type}] ${f.name}`);
+                    }
+                }
+                
                 // 本大区地标
                 lines.push('');
                 lines.push('───────────────────────────────────────');
@@ -698,6 +771,141 @@
                 
                 landmarks.sort((a, b) => a.distance - b.distance);
                 return landmarks;
+            },
+            
+            // 地表类型配置
+            TERRAIN_CONFIG: {
+                1: { type: 'Pavement' },
+                2: { type: 'Standard_Grass' },
+                3: { type: 'Tall_Grass' },
+                4: { type: 'Water_Shallow' },
+                5: { type: 'Water_Deep' },
+                6: { type: 'Sand' },
+                7: { type: 'Rock' },
+                8: { type: 'Snow' },
+                9: { type: 'Ice' },
+                10: { type: 'Lava' },
+                11: { type: 'Mud' },
+                12: { type: 'Wet_Soil' },
+                13: { type: 'Ash' },
+                14: { type: 'Metal' },
+                15: { type: 'Wood' },
+                16: { type: 'Carpet' }
+            },
+            
+            // 从 mapdata.json 获取 IntGrid 值
+            getIntVal(gx, gy, layerName) {
+                if (!this.mapData || !this.mapData.levels || !this.mapData.levels[0]) return 0;
+                
+                const levelData = this.mapData.levels[0];
+                const gridSize = 16;
+                
+                for (const layer of levelData.layerInstances || []) {
+                    if (layer.__identifier === layerName && layer.__type === 'IntGrid') {
+                        const cWid = layer.__cWid;
+                        const idx = gy * cWid + gx;
+                        if (layer.intGridCsv && idx >= 0 && idx < layer.intGridCsv.length) {
+                            return layer.intGridCsv[idx];
+                        }
+                    }
+                }
+                return 0;
+            },
+            
+            // 获取格子的基本信息
+            getGridInfo(gx, gy) {
+                const info = {
+                    gx, gy,
+                    surface: null,
+                    traversable: true,
+                    threat: 0,
+                    biomeZone: null,
+                    region: null
+                };
+                
+                // 获取地表类型
+                const surfaceVal = this.getIntVal(gx, gy, 'Surface');
+                if (surfaceVal > 0 && this.TERRAIN_CONFIG[surfaceVal]) {
+                    info.surface = this.TERRAIN_CONFIG[surfaceVal].type;
+                }
+                
+                // 获取可通行性
+                const travVal = this.getIntVal(gx, gy, 'Traversability');
+                info.traversable = travVal !== 1;
+                
+                // 获取威胁度
+                info.threat = this.getIntVal(gx, gy, 'Threat');
+                
+                // 获取Region
+                const regionVal = this.getIntVal(gx, gy, 'Regions');
+                const regionMap = {
+                    2: 'Region_Zenith',
+                    3: 'Region_Neon',
+                    4: 'Region_Bloom',
+                    5: 'Region_Shadow',
+                    6: 'Region_Apex'
+                };
+                if (regionMap[regionVal]) {
+                    info.region = regionMap[regionVal];
+                }
+                
+                return info;
+            },
+            
+            // 获取周围格子的简要信息
+            getSurroundingInfo(gx, gy, radius = 2) {
+                const surrounding = [];
+                
+                const offsets = radius === 1 ? [
+                    { dx: 0, dy: -1, dir: '北' },
+                    { dx: 0, dy: 1, dir: '南' },
+                    { dx: -1, dy: 0, dir: '西' },
+                    { dx: 1, dy: 0, dir: '东' }
+                ] : [
+                    { dx: 0, dy: -1, dir: '北' },
+                    { dx: 0, dy: 1, dir: '南' },
+                    { dx: -1, dy: 0, dir: '西' },
+                    { dx: 1, dy: 0, dir: '东' },
+                    { dx: -1, dy: -1, dir: '西北' },
+                    { dx: 1, dy: -1, dir: '东北' },
+                    { dx: -1, dy: 1, dir: '西南' },
+                    { dx: 1, dy: 1, dir: '东南' },
+                    { dx: 0, dy: -2, dir: '北2' },
+                    { dx: 0, dy: 2, dir: '南2' },
+                    { dx: -2, dy: 0, dir: '西2' },
+                    { dx: 2, dy: 0, dir: '东2' }
+                ];
+                
+                for (const { dx, dy, dir } of offsets) {
+                    const ngx = gx + dx;
+                    const ngy = gy + dy;
+                    const info = this.getGridInfo(ngx, ngy);
+                    const entities = this.getEntitiesAtGrid(ngx, ngy);
+                    
+                    if (info) {
+                        surrounding.push({
+                            direction: dir,
+                            offset: [dx, dy],
+                            surface: info.surface,
+                            traversable: info.traversable,
+                            threat: info.threat,
+                            biomeZone: info.biomeZone || entities.biomeZone,
+                            regionZone: entities.regionZone,
+                            placeAnchor: entities.placeAnchor,
+                            service: entities.service,
+                            pokemonCenter: entities.pokemonCenter,
+                            npcActor: entities.npcActor,
+                            warp: entities.warp,
+                            bedRest: entities.bedRest,
+                            pcTerminal: entities.pcTerminal,
+                            policeBox: entities.policeBox,
+                            transitStation: entities.transitStation,
+                            lavaLine: entities.lavaLine
+                        });
+                    }
+                }
+                
+                return surrounding;
             }
         };
         
