@@ -1392,13 +1392,20 @@ const TacticalSystem = {
         };
         
         if (!this._movementMode) {
-            // 显示"移动"按钮
+            // 显示"移动"和"遭遇战"按钮
             const btnW = 120;
-            const btnX = panelX + (panelW - btnW) / 2;
+            const totalW = btnW * 2 + btnGap;
+            const startX = panelX + (panelW - totalW) / 2;
             
-            drawSkewedButton(btnX, btnY, btnW, btnH, '#00cec9', '▶ RELOCATE');
+            // RELOCATE 按钮
+            drawSkewedButton(startX, btnY, btnW, btnH, '#00cec9', '▶ RELOCATE');
+            this._moveButtonRect = { x: startX - 20, y: btnY, w: btnW + 40, h: btnH };
             
-            this._moveButtonRect = { x: btnX - 20, y: btnY, w: btnW + 40, h: btnH };
+            // ENCOUNTER 按钮
+            const encounterX = startX + btnW + btnGap;
+            drawSkewedButton(encounterX, btnY, btnW, btnH, '#f39c12', '⚔ ENCOUNTER');
+            this._encounterButtonRect = { x: encounterX - 20, y: btnY, w: btnW + 40, h: btnH };
+            
             this._confirmButtonRect = null;
             this._cancelButtonRect = null;
         } else {
@@ -1465,6 +1472,11 @@ const TacticalSystem = {
     _moveButtonRect: null, // 移动按钮区域
     _confirmButtonRect: null, // 确认按钮区域
     _cancelButtonRect: null, // 取消按钮区域
+    _encounterButtonRect: null, // 遭遇战按钮区域
+    
+    // ========== 遭遇战模式状态 ==========
+    _encounterPopupVisible: false, // 遭遇战弹窗是否显示
+    _encounterPokemonList: [], // 当前格子的宝可梦列表
     
     // 检查格子是否在移动范围内（曼哈顿距离 <= 2）
     _isInMoveRange: function(gx, gy) {
@@ -1561,6 +1573,18 @@ const TacticalSystem = {
             lines.push('环境无显著变化，仍在同一区域内移动。');
         }
         
+        // 获取目标位置的宝可梦（从 ERA 数据读取）
+        const destPokemon = this._getDestinationPokemon(toInfo);
+        if (destPokemon && destPokemon.length > 0) {
+            lines.push('');
+            lines.push('【目标区域宝可梦】');
+            destPokemon.forEach(poke => {
+                const levelRange = poke.level_range ? ` Lv.${poke.level_range}` : '';
+                const rarity = poke.rarity ? ` (${poke.rarity})` : '';
+                lines.push(`  • ${poke.name}${levelRange}${rarity}`);
+            });
+        }
+        
         return lines.join('\n');
     },
     
@@ -1624,6 +1648,31 @@ const TacticalSystem = {
             }
         }
         return { name: zoneKey, exterior: null };
+    },
+    
+    // 获取目标位置的宝可梦（从 ERA 数据读取）
+    _getDestinationPokemon: function(toInfo) {
+        if (!window.PokemonSpawnCache) {
+            console.warn('[Tactical] PokemonSpawnCache 未加载');
+            return [];
+        }
+        
+        const locationInfo = {
+            gx: toInfo.gx,
+            gy: toInfo.gy,
+            threat: toInfo.threat || 0,
+            surfaceType: toInfo.surface || 'Unknown',
+            biomeZone: toInfo.biome || 'Unknown'
+        };
+        
+        const pokemonList = window.PokemonSpawnCache.getForLocation(locationInfo) || [];
+        
+        // 如果没有数据，返回空数组（不打印警告，因为可能是正常情况）
+        if (pokemonList.length === 0) {
+            console.log('[Tactical] 目标位置暂无宝可梦数据');
+        }
+        
+        return pokemonList;
     },
     
     // 复制到剪贴板
@@ -1935,6 +1984,26 @@ const TacticalSystem = {
     
     // 处理面板点击（折叠/展开）
     handlePanelClick: function(mx, my) {
+        // 检查遭遇战按钮
+        if (this._encounterButtonRect && !this._movementMode) {
+            const r = this._encounterButtonRect;
+            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+                this._openEncounterPopup();
+                return true;
+            }
+        }
+        
+        // 检查移动按钮
+        if (this._moveButtonRect && !this._movementMode) {
+            const r = this._moveButtonRect;
+            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+                this._movementMode = true;
+                this._movementTarget = null;
+                console.log('[Tactical] 进入移动模式');
+                return true;
+            }
+        }
+        
         // 检查确认按钮
         if (this._confirmButtonRect && this._movementTarget) {
             const r = this._confirmButtonRect;
@@ -1974,6 +2043,275 @@ const TacticalSystem = {
         }
         
         return false;
+    },
+    
+    // 打开遭遇战弹窗
+    _openEncounterPopup: function() {
+        // 获取当前格子的宝可梦
+        const locationInfo = {
+            gx: this.playerGrid.x,
+            gy: this.playerGrid.y,
+            threat: 0,
+            surfaceType: 'Unknown',
+            biomeZone: 'Unknown'
+        };
+        
+        if (window.PokemonSpawnCache) {
+            this._encounterPokemonList = window.PokemonSpawnCache.getForLocation(locationInfo) || [];
+        } else {
+            this._encounterPokemonList = [];
+        }
+        
+        if (this._encounterPokemonList.length === 0) {
+            // 没有宝可梦时显示提示
+            this._showEncounterNotification('当前区域暂无宝可梦', false);
+            return;
+        }
+        
+        // 创建遭遇战弹窗
+        this._createEncounterPopup();
+        
+        console.log('[Tactical] 打开遭遇战弹窗，宝可梦数量:', this._encounterPokemonList.length);
+    },
+    
+    // 创建遭遇战弹窗 HTML
+    _createEncounterPopup: function() {
+        // 移除旧弹窗
+        const oldPopup = document.getElementById('encounter-popup');
+        if (oldPopup) oldPopup.remove();
+        
+        // 创建弹窗容器
+        const popup = document.createElement('div');
+        popup.id = 'encounter-popup';
+        popup.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.98);
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 0;
+            z-index: 10000;
+            min-width: 400px;
+            max-width: 500px;
+            max-height: 70vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        `;
+        
+        // 标题栏
+        const header = document.createElement('div');
+        header.style.cssText = `
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 16px 20px;
+            font-family: 'Exo 2', sans-serif;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        `;
+        header.innerHTML = `
+            <span>⚔ WILD POKEMON ENCOUNTER</span>
+            <button id="encounter-close" style="
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: white;
+                width: 28px;
+                height: 28px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 18px;
+                line-height: 1;
+                transition: background 0.2s;
+            ">×</button>
+        `;
+        
+        // 宝可梦列表容器
+        const listContainer = document.createElement('div');
+        listContainer.style.cssText = `
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        `;
+        
+        // 生成宝可梦列表
+        this._encounterPokemonList.forEach((poke, index) => {
+            const item = document.createElement('div');
+            item.className = 'encounter-pokemon-item';
+            item.dataset.index = index;
+            item.style.cssText = `
+                background: rgba(243, 156, 18, 0.08);
+                border: 2px solid rgba(243, 156, 18, 0.2);
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+                cursor: pointer;
+                transition: all 0.2s;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            `;
+            
+            const levelRange = poke.level_range || '??';
+            const rarity = poke.rarity || 'common';
+            const rarityColors = {
+                common: '#95a5a6',
+                uncommon: '#3498db',
+                rare: '#9b59b6',
+                epic: '#e74c3c',
+                legendary: '#f39c12'
+            };
+            const rarityColor = rarityColors[rarity] || '#95a5a6';
+            
+            item.innerHTML = `
+                <div style="flex: 1;">
+                    <div style="font-family: 'Chakra Petch', monospace; font-weight: 800; font-size: 16px; color: #2c3e50; margin-bottom: 4px;">
+                        ${poke.name}
+                    </div>
+                    <div style="font-family: 'Exo 2', sans-serif; font-size: 11px; color: rgba(0, 0, 0, 0.6);">
+                        Lv.${levelRange} · <span style="color: ${rarityColor}; font-weight: 700;">${rarity.toUpperCase()}</span>
+                    </div>
+                </div>
+                <div style="
+                    background: linear-gradient(135deg, #f39c12, #e67e22);
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-family: 'Exo 2', sans-serif;
+                    font-weight: 800;
+                    font-size: 11px;
+                    letter-spacing: 0.5px;
+                ">
+                    BATTLE
+                </div>
+            `;
+            
+            // 悬停效果
+            item.addEventListener('mouseenter', () => {
+                item.style.background = 'rgba(243, 156, 18, 0.15)';
+                item.style.borderColor = 'rgba(243, 156, 18, 0.5)';
+                item.style.transform = 'translateX(4px)';
+            });
+            item.addEventListener('mouseleave', () => {
+                item.style.background = 'rgba(243, 156, 18, 0.08)';
+                item.style.borderColor = 'rgba(243, 156, 18, 0.2)';
+                item.style.transform = 'translateX(0)';
+            });
+            
+            // 点击事件
+            item.addEventListener('click', () => {
+                this._triggerEncounter(poke);
+            });
+            
+            listContainer.appendChild(item);
+        });
+        
+        popup.appendChild(header);
+        popup.appendChild(listContainer);
+        document.body.appendChild(popup);
+        
+        // 关闭按钮事件
+        document.getElementById('encounter-close').addEventListener('click', () => {
+            popup.remove();
+        });
+        
+        // 点击外部关闭
+        setTimeout(() => {
+            const closeOnOutside = (e) => {
+                if (e.target === popup) {
+                    popup.remove();
+                    document.removeEventListener('click', closeOnOutside);
+                }
+            };
+            document.addEventListener('click', closeOnOutside);
+        }, 100);
+    },
+    
+    // 触发遭遇战
+    _triggerEncounter: function(pokemon) {
+        // 关闭弹窗
+        const popup = document.getElementById('encounter-popup');
+        if (popup) popup.remove();
+        
+        // 生成遭遇战提示词
+        const encounterText = this._generateEncounterPrompt(pokemon);
+        this._copyToClipboard(encounterText);
+        
+        // 显示通知
+        this._showEncounterNotification(`遭遇 ${pokemon.name}！`, true);
+        
+        console.log('[Tactical] 触发遭遇战:', pokemon.name);
+    },
+    
+    // 生成遭遇战提示词
+    _generateEncounterPrompt: function(pokemon) {
+        const currentInfo = this._getGridFullInfo(this.playerGrid.x, this.playerGrid.y);
+        const levelRange = pokemon.level_range || '??';
+        const rarity = pokemon.rarity || 'common';
+        
+        const lines = [];
+        lines.push('【野生宝可梦遭遇】');
+        lines.push('');
+        lines.push(`玩家在 [${currentInfo.displayX}, ${currentInfo.displayY}] 遭遇了野生宝可梦！`);
+        lines.push('');
+        lines.push(`▶ 宝可梦: ${pokemon.name}`);
+        lines.push(`▶ 等级: Lv.${levelRange}`);
+        lines.push(`▶ 稀有度: ${rarity}`);
+        lines.push('');
+        lines.push(`【当前环境】`);
+        lines.push(`地区: ${currentInfo.region}`);
+        lines.push(`生态: ${currentInfo.biome}`);
+        if (currentInfo.regionZone) lines.push(`区域: ${currentInfo.regionZone}`);
+        lines.push(`地表: ${currentInfo.surface}`);
+        lines.push('');
+        lines.push('战斗即将开始！');
+        
+        return lines.join('\n');
+    },
+    
+    // 显示遭遇战通知
+    _showEncounterNotification: function(message, isSuccess) {
+        const old = document.querySelector('.copy-notification');
+        if (old) old.remove();
+        
+        const notification = document.createElement('div');
+        notification.className = 'copy-notification';
+        notification.innerHTML = `
+            <div class="copy-notif-internal">
+                <div class="copy-notif-icon">
+                    ${isSuccess ? `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="24" height="24">
+                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
+                        </svg>
+                    ` : `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="24" height="24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    `}
+                </div>
+                <div class="copy-notif-text">
+                    <div class="copy-notif-title">${isSuccess ? 'ENCOUNTER TRIGGERED' : 'NO POKEMON'}</div>
+                    <div class="copy-notif-desc">${message}</div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        void notification.offsetWidth;
+        requestAnimationFrame(() => notification.classList.add('show'));
+        
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 500);
+        }, 3500);
     },
     
     // 确认移动

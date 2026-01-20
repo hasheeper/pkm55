@@ -1320,17 +1320,20 @@ function updatePlayerCoordsUI() {
 function toggleTacticalMode() {
     const btnText = document.getElementById('action-btn-text');
     const relocateBtn = document.getElementById('relocate-btn');
+    const encounterBtn = document.getElementById('encounter-btn');
     const isDiving = !document.body.classList.contains('tactical-mode');
 
     if(isDiving) {
         document.body.classList.add('tactical-mode');
         if(btnText) btnText.innerText = "RETURN TO ORBIT";
         if(relocateBtn) relocateBtn.style.display = 'block';
+        if(encounterBtn) encounterBtn.style.display = 'block';
         enterPlayerTactical();
     } else {
         document.body.classList.remove('tactical-mode');
         if(btnText) btnText.innerText = "TACTICAL DIVE";
         if(relocateBtn) relocateBtn.style.display = 'none';
+        if(encounterBtn) encounterBtn.style.display = 'none';
         // 退出战术模式时关闭移动模式
         if(window.TacticalSystem && window.TacticalSystem._movementMode) {
             window.TacticalSystem._movementMode = false;

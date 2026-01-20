@@ -411,7 +411,9 @@
                     pcTerminal: null,
                     policeBox: null,
                     transitStation: null,
-                    lavaLine: null
+                    lavaLine: null,
+                    seaRoute: null,
+                    skyNet: null
                 };
                 
                 if (!this.mapData || !this.mapData.levels || !this.mapData.levels[0]) return entities;
@@ -466,6 +468,10 @@
                                 entities.transitStation = fieldValue;
                             } else if (id === 'Lava_Line') {
                                 entities.lavaLine = fieldValue;
+                            } else if (id === 'Sea_Route') {
+                                entities.seaRoute = fieldValue;
+                            } else if (id === 'Sky_Net') {
+                                entities.skyNet = fieldValue;
                             }
                         }
                     }
@@ -488,7 +494,6 @@
                 const entities = this.getEntitiesAtGrid(internal.gx, internal.gy);
                 const gridInfo = this.getGridInfo(internal.gx, internal.gy);
                 
-                lines.push('═══════════════════════════════════════');
                 lines.push('【当前位置】');
                 lines.push(`坐标: [${x}, ${y}] ${regionShort}`);
                 lines.push(`地表: ${gridInfo.surface || '未知'}`);
@@ -617,10 +622,19 @@
                     lines.push(`【缆车站】${lavaDesc?.name || entities.lavaLine}`);
                     if (lavaDesc?.desc) lines.push(`  ${lavaDesc.desc}`);
                 }
+                if (entities.seaRoute) {
+                    const seaDesc = this.transitInfra[entities.seaRoute];
+                    lines.push(`【港口码头】${seaDesc?.name || entities.seaRoute}`);
+                    if (seaDesc?.desc) lines.push(`  ${seaDesc.desc}`);
+                }
+                if (entities.skyNet) {
+                    const skyDesc = this.transitInfra[entities.skyNet];
+                    lines.push(`【空运停机坪】${skyDesc?.name || entities.skyNet}`);
+                    if (skyDesc?.desc) lines.push(`  ${skyDesc.desc}`);
+                }
                 
                 // ========== 周围环境（半径2格）==========
                 lines.push('');
-                lines.push('───────────────────────────────────────');
                 lines.push('【周围环境】(半径2格)');
                 
                 const surrounding = this.getSurroundingInfo(internal.gx, internal.gy, 2);
@@ -695,7 +709,6 @@
                 const biomeZoneName = entities.biomeZone;
                 if (biomeZoneName) {
                     lines.push('');
-                    lines.push('───────────────────────────────────────');
                     lines.push(`【本区块地标】(${biomeZoneName})`);
                     
                     const biomeLandmarks = this.getBiomeZoneLandmarks(biomeZoneName, x, y);
@@ -710,7 +723,6 @@
                 
                 // 本大区地标
                 lines.push('');
-                lines.push('───────────────────────────────────────');
                 lines.push(`【本大区地标】(${regionInfo?.name || regionId})`);
                 
                 const landmarks = this.getRegionLandmarks(regionId, x, y);
@@ -722,7 +734,6 @@
                 
                 // 全图区域概览
                 lines.push('');
-                lines.push('───────────────────────────────────────');
                 lines.push('【全图区域】');
                 
                 for (const [id, data] of Object.entries(this.REGIONS)) {
@@ -731,7 +742,127 @@
                     lines.push(`  ${marker} ${data.name} [${data.center[0]}, ${data.center[1]}]`);
                 }
                 
-                lines.push('═══════════════════════════════════════');
+                // ========== 交通系统 ==========
+                const transitStations = this.getAllTransitStations();
+                const seaPorts = this.getAllSeaPorts();
+                const airfields = this.getAllAirfields();
+                
+                if (transitStations.length > 0 || seaPorts.length > 0 || airfields.length > 0) {
+                    lines.push('');
+                    lines.push('【交通系统】');
+                    
+                    // 环线车站
+                    if (transitStations.length > 0) {
+                        lines.push('  ■ 环线车站:');
+                        const currentRegionStations = [];
+                        const otherRegionStations = [];
+                        
+                        for (const station of transitStations) {
+                            const stationRegion = this.getRegionByCoords(station.displayX, station.displayY);
+                            if (stationRegion === regionId) {
+                                currentRegionStations.push(station);
+                            } else {
+                                otherRegionStations.push(station);
+                            }
+                        }
+                        
+                        if (currentRegionStations.length > 0) {
+                            lines.push(`    ★ ${regionInfo?.name || regionId}:`);
+                            for (const st of currentRegionStations) {
+                                const desc = this.transitInfra[st.id];
+                                const name = desc?.name || st.id.replace(/_/g, ' ');
+                                lines.push(`      • ${name} [${st.displayX}, ${st.displayY}]`);
+                            }
+                        }
+                        
+                        if (otherRegionStations.length > 0) {
+                            lines.push(`    ○ 其他大区:`);
+                            for (const st of otherRegionStations) {
+                                const stationRegion = this.getRegionByCoords(st.displayX, st.displayY);
+                                const regionData = this.REGIONS[stationRegion];
+                                const regionName = regionData?.short || stationRegion;
+                                const desc = this.transitInfra[st.id];
+                                const name = desc?.name || st.id.replace(/_/g, ' ');
+                                lines.push(`      • ${name} [${st.displayX}, ${st.displayY}] (${regionName})`);
+                            }
+                        }
+                    }
+                    
+                    // 港口码头
+                    if (seaPorts.length > 0) {
+                        lines.push('  ■ 港口码头:');
+                        const currentRegionPorts = [];
+                        const otherRegionPorts = [];
+                        
+                        for (const port of seaPorts) {
+                            const portRegion = this.getRegionByCoords(port.displayX, port.displayY);
+                            if (portRegion === regionId) {
+                                currentRegionPorts.push(port);
+                            } else {
+                                otherRegionPorts.push(port);
+                            }
+                        }
+                        
+                        if (currentRegionPorts.length > 0) {
+                            lines.push(`    ★ ${regionInfo?.name || regionId}:`);
+                            for (const pt of currentRegionPorts) {
+                                const desc = this.transitInfra[pt.id];
+                                const name = desc?.name || pt.id.replace(/_/g, ' ');
+                                lines.push(`      • ${name} [${pt.displayX}, ${pt.displayY}]`);
+                            }
+                        }
+                        
+                        if (otherRegionPorts.length > 0) {
+                            lines.push(`    ○ 其他大区:`);
+                            for (const pt of otherRegionPorts) {
+                                const portRegion = this.getRegionByCoords(pt.displayX, pt.displayY);
+                                const regionData = this.REGIONS[portRegion];
+                                const regionName = regionData?.short || portRegion;
+                                const desc = this.transitInfra[pt.id];
+                                const name = desc?.name || pt.id.replace(/_/g, ' ');
+                                lines.push(`      • ${name} [${pt.displayX}, ${pt.displayY}] (${regionName})`);
+                            }
+                        }
+                    }
+                    
+                    // 空运停机坪
+                    if (airfields.length > 0) {
+                        lines.push('  ■ 空运停机坪:');
+                        const currentRegionAir = [];
+                        const otherRegionAir = [];
+                        
+                        for (const air of airfields) {
+                            const airRegion = this.getRegionByCoords(air.displayX, air.displayY);
+                            if (airRegion === regionId) {
+                                currentRegionAir.push(air);
+                            } else {
+                                otherRegionAir.push(air);
+                            }
+                        }
+                        
+                        if (currentRegionAir.length > 0) {
+                            lines.push(`    ★ ${regionInfo?.name || regionId}:`);
+                            for (const af of currentRegionAir) {
+                                const desc = this.transitInfra[af.id];
+                                const name = desc?.name || af.id.replace(/_/g, ' ');
+                                lines.push(`      • ${name} [${af.displayX}, ${af.displayY}]`);
+                            }
+                        }
+                        
+                        if (otherRegionAir.length > 0) {
+                            lines.push(`    ○ 其他大区:`);
+                            for (const af of otherRegionAir) {
+                                const airRegion = this.getRegionByCoords(af.displayX, af.displayY);
+                                const regionData = this.REGIONS[airRegion];
+                                const regionName = regionData?.short || airRegion;
+                                const desc = this.transitInfra[af.id];
+                                const name = desc?.name || af.id.replace(/_/g, ' ');
+                                lines.push(`      • ${name} [${af.displayX}, ${af.displayY}] (${regionName})`);
+                            }
+                        }
+                    }
+                }
+                
                 
                 return lines.join('\n');
             },
@@ -921,6 +1052,137 @@
                 }
                 
                 return info;
+            },
+            
+            // 获取所有交通站点
+            getAllTransitStations() {
+                if (!this.mapData || !this.mapData.levels || !this.mapData.levels[0]) return [];
+                
+                const stations = [];
+                const levelData = this.mapData.levels[0];
+                const gridSize = 16;
+                
+                for (const layer of levelData.layerInstances || []) {
+                    if (layer.__identifier === 'Entities' && layer.__type === 'Entities') {
+                        for (const entity of layer.entityInstances || []) {
+                            if (entity.__identifier === 'Transit_Station') {
+                                const worldX = entity.__worldX || entity.px[0];
+                                const worldY = entity.__worldY || entity.px[1];
+                                const gx = Math.floor(worldX / gridSize);
+                                const gy = Math.floor(worldY / gridSize);
+                                
+                                // 转换为显示坐标
+                                const displayCoords = this.toDisplayCoords(gx, gy);
+                                
+                                // 获取站点ID
+                                let stationId = null;
+                                for (const field of entity.fieldInstances || []) {
+                                    if (field.__identifier === 'Transit_Station') {
+                                        stationId = field.__value;
+                                        break;
+                                    }
+                                }
+                                
+                                if (stationId) {
+                                    stations.push({
+                                        id: stationId,
+                                        gx, gy,
+                                        displayX: displayCoords.x,
+                                        displayY: displayCoords.y
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return stations;
+            },
+            
+            // 获取所有港口码头
+            getAllSeaPorts() {
+                if (!this.mapData || !this.mapData.levels || !this.mapData.levels[0]) return [];
+                
+                const ports = [];
+                const levelData = this.mapData.levels[0];
+                const gridSize = 16;
+                
+                for (const layer of levelData.layerInstances || []) {
+                    if (layer.__identifier === 'Entities' && layer.__type === 'Entities') {
+                        for (const entity of layer.entityInstances || []) {
+                            if (entity.__identifier === 'Sea_Route') {
+                                const worldX = entity.__worldX || entity.px[0];
+                                const worldY = entity.__worldY || entity.px[1];
+                                const gx = Math.floor(worldX / gridSize);
+                                const gy = Math.floor(worldY / gridSize);
+                                
+                                const displayCoords = this.toDisplayCoords(gx, gy);
+                                
+                                let portId = null;
+                                for (const field of entity.fieldInstances || []) {
+                                    if (field.__identifier === 'Sea_Route') {
+                                        portId = field.__value;
+                                        break;
+                                    }
+                                }
+                                
+                                if (portId) {
+                                    ports.push({
+                                        id: portId,
+                                        gx, gy,
+                                        displayX: displayCoords.x,
+                                        displayY: displayCoords.y
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return ports;
+            },
+            
+            // 获取所有空运停机坪
+            getAllAirfields() {
+                if (!this.mapData || !this.mapData.levels || !this.mapData.levels[0]) return [];
+                
+                const airfields = [];
+                const levelData = this.mapData.levels[0];
+                const gridSize = 16;
+                
+                for (const layer of levelData.layerInstances || []) {
+                    if (layer.__identifier === 'Entities' && layer.__type === 'Entities') {
+                        for (const entity of layer.entityInstances || []) {
+                            if (entity.__identifier === 'Sky_Net') {
+                                const worldX = entity.__worldX || entity.px[0];
+                                const worldY = entity.__worldY || entity.px[1];
+                                const gx = Math.floor(worldX / gridSize);
+                                const gy = Math.floor(worldY / gridSize);
+                                
+                                const displayCoords = this.toDisplayCoords(gx, gy);
+                                
+                                let airId = null;
+                                for (const field of entity.fieldInstances || []) {
+                                    if (field.__identifier === 'Sky_Net') {
+                                        airId = field.__value;
+                                        break;
+                                    }
+                                }
+                                
+                                if (airId) {
+                                    airfields.push({
+                                        id: airId,
+                                        gx, gy,
+                                        displayX: displayCoords.x,
+                                        displayY: displayCoords.y
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return airfields;
             },
             
             // 获取周围格子的简要信息
@@ -1342,7 +1604,6 @@
                 if (currentPokemon && currentPokemon.length > 0) {
                     const pokemonLines = [
                         '',
-                        '───────────────────────────────────────',
                         '【附近宝可梦】'
                     ];
                     for (const poke of currentPokemon) {
