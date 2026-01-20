@@ -249,6 +249,40 @@
             transitInfra: {},
             npcContext: {},
             
+            // mapdata.json 到 mapinfo.json 的键名映射（处理不一致）
+            TRANSIT_ID_MAP: {
+                'Summit_Dojo_POINT': 'Summit_Dojo_Point',
+                'Northern_Cemetery': 'Northern_Cemetery_Pad',
+                'Zenith_HQ': 'Zenith_HQ_Helipad'
+            },
+            
+            // system_warps 映射（去掉 _N 后缀）
+            WARP_ID_MAP: {
+                'Sewer_0': 'Sewer', 'Sewer_1': 'Sewer', 'Sewer_2': 'Sewer',
+                'Cave_0': 'Cave', 'Cave_1': 'Cave', 'Cave_2': 'Cave',
+                'Gate_0': 'Gate', 'Gate_1': 'Gate'
+            },
+            
+            // NPC Actor 映射（处理重复或别名）
+            NPC_ID_MAP: {
+                'Iono_Stream_Tower': 'Iono_Levincia_Guild_Tower'
+            },
+            
+            // 获取规范化的交通设施ID
+            normalizeTransitId(id) {
+                return this.TRANSIT_ID_MAP[id] || id;
+            },
+            
+            // 获取规范化的传送点ID
+            normalizeWarpId(id) {
+                return this.WARP_ID_MAP[id] || id;
+            },
+            
+            // 获取规范化的NPC Actor ID
+            normalizeNpcId(id) {
+                return this.NPC_ID_MAP[id] || id;
+            },
+            
             // 加载所有数据文件
             async loadData() {
                 if (this.dataLoaded) return true;
@@ -395,6 +429,22 @@
                 let internalY = MAP_CENTER_Y - y - 1;
                 
                 return { gx: internalX, gy: internalY };
+            },
+            
+            // 内部格子坐标转显示坐标（toInternalCoords 的逆运算）
+            toDisplayCoords(gx, gy) {
+                const MAP_CENTER_X = 26;
+                const MAP_CENTER_Y = 26;
+                
+                // X轴逆运算
+                let displayX = gx - MAP_CENTER_X;
+                if (displayX >= 0) displayX += 1;
+                
+                // Y轴逆运算
+                let displayY = MAP_CENTER_Y - gy - 1;
+                if (displayY >= 0) displayY += 1;
+                
+                return { x: displayX, y: displayY };
             },
             
             // 从 mapdata.json 获取指定格子的实体信息
@@ -588,13 +638,15 @@
                     if (anchorDesc?.desc) lines.push(`  ${anchorDesc.desc}`);
                 }
                 if (entities.warp) {
-                    const warpDesc = this.systemWarps[entities.warp];
-                    lines.push(`【传送点】${entities.warp}`);
+                    const normalizedWarpId = this.normalizeWarpId(entities.warp);
+                    const warpDesc = this.systemWarps[normalizedWarpId];
+                    lines.push(`【传送点】${normalizedWarpId}`);
                     if (warpDesc?.desc) lines.push(`  ${warpDesc.desc}`);
                 }
                 if (entities.npcActor) {
-                    const npcDesc = this.npcContext[entities.npcActor];
-                    lines.push(`【NPC场景】${entities.npcActor}`);
+                    const normalizedNpcId = this.normalizeNpcId(entities.npcActor);
+                    const npcDesc = this.npcContext[normalizedNpcId];
+                    lines.push(`【NPC场景】${normalizedNpcId.replace(/_/g, ' ')}`);
                     if (npcDesc?.desc) lines.push(`  ${npcDesc.desc}`);
                 }
                 if (entities.bedRest) {
@@ -628,8 +680,9 @@
                     if (seaDesc?.desc) lines.push(`  ${seaDesc.desc}`);
                 }
                 if (entities.skyNet) {
-                    const skyDesc = this.transitInfra[entities.skyNet];
-                    lines.push(`【空运停机坪】${skyDesc?.name || entities.skyNet}`);
+                    const normalizedId = this.normalizeTransitId(entities.skyNet);
+                    const skyDesc = this.transitInfra[normalizedId];
+                    lines.push(`【空运停机坪】${skyDesc?.name || normalizedId.replace(/_/g, ' ')}`);
                     if (skyDesc?.desc) lines.push(`  ${skyDesc.desc}`);
                 }
                 
@@ -843,8 +896,9 @@
                         if (currentRegionAir.length > 0) {
                             lines.push(`    ★ ${regionInfo?.name || regionId}:`);
                             for (const af of currentRegionAir) {
-                                const desc = this.transitInfra[af.id];
-                                const name = desc?.name || af.id.replace(/_/g, ' ');
+                                const normalizedId = this.normalizeTransitId(af.id);
+                                const desc = this.transitInfra[normalizedId];
+                                const name = desc?.name || normalizedId.replace(/_/g, ' ');
                                 lines.push(`      • ${name} [${af.displayX}, ${af.displayY}]`);
                             }
                         }
@@ -855,8 +909,9 @@
                                 const airRegion = this.getRegionByCoords(af.displayX, af.displayY);
                                 const regionData = this.REGIONS[airRegion];
                                 const regionName = regionData?.short || airRegion;
-                                const desc = this.transitInfra[af.id];
-                                const name = desc?.name || af.id.replace(/_/g, ' ');
+                                const normalizedId = this.normalizeTransitId(af.id);
+                                const desc = this.transitInfra[normalizedId];
+                                const name = desc?.name || normalizedId.replace(/_/g, ' ');
                                 lines.push(`      • ${name} [${af.displayX}, ${af.displayY}] (${regionName})`);
                             }
                         }
@@ -1063,7 +1118,7 @@
                 const gridSize = 16;
                 
                 for (const layer of levelData.layerInstances || []) {
-                    if (layer.__identifier === 'Entities' && layer.__type === 'Entities') {
+                    if (layer.__type === 'Entities') {
                         for (const entity of layer.entityInstances || []) {
                             if (entity.__identifier === 'Transit_Station') {
                                 const worldX = entity.__worldX || entity.px[0];
@@ -1108,7 +1163,7 @@
                 const gridSize = 16;
                 
                 for (const layer of levelData.layerInstances || []) {
-                    if (layer.__identifier === 'Entities' && layer.__type === 'Entities') {
+                    if (layer.__type === 'Entities') {
                         for (const entity of layer.entityInstances || []) {
                             if (entity.__identifier === 'Sea_Route') {
                                 const worldX = entity.__worldX || entity.px[0];
@@ -1151,7 +1206,7 @@
                 const gridSize = 16;
                 
                 for (const layer of levelData.layerInstances || []) {
-                    if (layer.__identifier === 'Entities' && layer.__type === 'Entities') {
+                    if (layer.__type === 'Entities') {
                         for (const entity of layer.entityInstances || []) {
                             if (entity.__identifier === 'Sky_Net') {
                                 const worldX = entity.__worldX || entity.px[0];
@@ -1562,6 +1617,67 @@
         
         // 记录上次的游戏日期，用于检测日期变化
         let lastGameDay = null;
+        // 记录上次的区域代码，用于检测区域变化
+        let lastRegionCode = null;
+        
+        // 区域ID到简称的映射
+        const REGION_SHORT_MAP = {
+            'Region_Zenith': 'Z',
+            'Region_Neon': 'N',
+            'Region_Bloom': 'B',
+            'Region_Shadow': 'S',
+            'Region_Apex': 'A'
+        };
+        
+        // 更新区域到 ERA 变量（通过 VariableEdit 注入消息）
+        async function updateRegionToEra(newRegion) {
+            try {
+                const variableEditData = {
+                    world_state: {
+                        location: {
+                            region: newRegion
+                        }
+                    }
+                };
+                
+                const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                const variableEditBlock = `<VariableEdit>\n${variableEditJson}\n</VariableEdit>`;
+                
+                console.log('[PKM] [REGION] 生成 VariableEdit:', variableEditBlock);
+                
+                // 获取最近一楼消息ID
+                const messageId = getLastMessageId();
+                if (!messageId) {
+                    console.warn('[PKM] [REGION] 无法获取最近消息ID，跳过');
+                    return false;
+                }
+                
+                // 获取消息内容（同步调用，不需要 await）
+                const messages = getChatMessages(messageId);
+                if (!messages || messages.length === 0) {
+                    console.warn('[PKM] [REGION] 无法获取消息内容，跳过');
+                    return false;
+                }
+                
+                const msg = messages[0];
+                let content = msg.message || '';
+                
+                // 在末尾追加 VariableEdit
+                content = content.trim() + '\n\n' + variableEditBlock;
+                
+                // 更新消息（使用 message_id 而不是 id）
+                await setChatMessages([{
+                    message_id: messageId,
+                    message: content
+                }], { refresh: 'affected' });
+                
+                console.log('[PKM] [REGION] ✓ 区域已更新为:', newRegion);
+                return true;
+            } catch (e) {
+                console.error('[PKM] [REGION] 更新失败:', e);
+                return false;
+            }
+        }
         
         // ========== 位置上下文注入函数 ==========
         async function injectLocationContext() {
@@ -1580,6 +1696,20 @@
                 if (!location || typeof location.x !== 'number') {
                     console.log('[PKM] 无位置数据，跳过位置注入');
                     return;
+                }
+                
+                // ========== 检测区域变化，自动更新 ERA 变量 ==========
+                const regionId = LocationContextBackend.getRegionByCoords(location.x, location.y);
+                const currentRegion = REGION_SHORT_MAP[regionId] || 'Z';
+                const storedRegion = location.region;
+                
+                // 如果区域变化，自动更新
+                if (storedRegion !== currentRegion) {
+                    console.log(`[PKM] [REGION] 检测到区域变化: ${storedRegion || '未知'} -> ${currentRegion}`);
+                    await updateRegionToEra(currentRegion);
+                    lastRegionCode = currentRegion;
+                } else if (lastRegionCode === null) {
+                    lastRegionCode = currentRegion;
                 }
                 
                 // ========== 检测日期变化，清除宝可梦刷新 ==========

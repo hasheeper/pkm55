@@ -68,6 +68,413 @@ const ZoneDB = {
 const ZoneOrder = ['N', 'B', 'S', 'A', 'Z'];
 
 /* ============================================================
+   TRANSIT SYSTEM (交通系统)
+   ============================================================ */
+// 交通数据缓存
+let transitData = {
+    mapData: null,
+    mapInfo: null,
+    stations: [],    // 环线车站
+    seaPorts: [],    // 港口码头
+    airfields: [],   // 空运停机坪
+    loaded: false
+};
+
+// 区域ID到简称的映射
+const REGION_ID_MAP = {
+    'Region_Zenith': 'Z',
+    'Region_Neon': 'N',
+    'Region_Bloom': 'B',
+    'Region_Shadow': 'S',
+    'Region_Apex': 'A'
+};
+
+// 交通设施ID规范化映射
+const TRANSIT_ID_NORMALIZE = {
+    'Summit_Dojo_POINT': 'Summit_Dojo_Point',
+    'Northern_Cemetery': 'Northern_Cemetery_Pad',
+    'Zenith_HQ': 'Zenith_HQ_Helipad'
+};
+
+// 坐标转换函数
+function toDisplayCoords(gx, gy) {
+    const MAP_CENTER_X = 26;
+    const MAP_CENTER_Y = 26;
+    let displayX = gx - MAP_CENTER_X;
+    if (displayX >= 0) displayX += 1;
+    let displayY = MAP_CENTER_Y - gy - 1;
+    if (displayY >= 0) displayY += 1;
+    return { x: displayX, y: displayY };
+}
+
+function toInternalCoords(displayX, displayY) {
+    const MAP_CENTER_X = 26;
+    const MAP_CENTER_Y = 26;
+    let x = displayX;
+    if (x > 0) x -= 1;
+    let internalX = x + MAP_CENTER_X;
+    let y = displayY;
+    if (y > 0) y -= 1;
+    let internalY = MAP_CENTER_Y - y - 1;
+    return { gx: internalX, gy: internalY };
+}
+
+// 计算两点间的曼哈顿距离
+function calcDistance(x1, y1, x2, y2) {
+    return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+}
+
+// 根据坐标获取区域（与 tavern-inject.js 保持一致）
+function getRegionByCoords(x, y) {
+    // Z区（中枢区）：中心 6x6 范围
+    if (Math.abs(x) <= 6 && Math.abs(y) <= 6) return 'Z';
+    // N区（霓虹区）：东南象限
+    if (x > 0 && y < 0) return 'N';
+    // B区（海滨区）：西南象限
+    if (x < 0 && y < 0) return 'B';
+    // S区（暗影区）：东北象限
+    if (x > 0 && y > 0) return 'S';
+    // A区（极诣区）：西北象限
+    if (x < 0 && y > 0) return 'A';
+    return 'Z';
+}
+
+// 加载交通数据
+async function loadTransitData() {
+    if (transitData.loaded) return true;
+    
+    try {
+        const baseUrl = window.PKM_URL || './';
+        const [mapDataRes, mapInfoRes] = await Promise.all([
+            fetch(baseUrl + 'map/data/mapdata.json'),
+            fetch(baseUrl + 'map/data/mapinfo.json')
+        ]);
+        
+        if (mapDataRes.ok) {
+            transitData.mapData = await mapDataRes.json();
+        }
+        if (mapInfoRes.ok) {
+            transitData.mapInfo = await mapInfoRes.json();
+        }
+        
+        if (transitData.mapData) {
+            extractTransitEntities();
+        }
+        
+        transitData.loaded = true;
+        console.log('[TRANSIT] 交通数据加载完成');
+        return true;
+    } catch (e) {
+        console.error('[TRANSIT] 加载失败:', e);
+        return false;
+    }
+}
+
+// 从 mapdata.json 提取交通实体
+function extractTransitEntities() {
+    if (!transitData.mapData?.levels?.[0]) return;
+    
+    const levelData = transitData.mapData.levels[0];
+    const gridSize = 16;
+    
+    transitData.stations = [];
+    transitData.seaPorts = [];
+    transitData.airfields = [];
+    
+    for (const layer of levelData.layerInstances || []) {
+        if (layer.__type !== 'Entities') continue;
+        
+        for (const entity of layer.entityInstances || []) {
+            const worldX = entity.__worldX || entity.px[0];
+            const worldY = entity.__worldY || entity.px[1];
+            const gx = Math.floor(worldX / gridSize);
+            const gy = Math.floor(worldY / gridSize);
+            const displayCoords = toDisplayCoords(gx, gy);
+            
+            let fieldValue = null;
+            if (entity.fieldInstances?.[0]) {
+                fieldValue = entity.fieldInstances[0].__value;
+            }
+            
+            const item = {
+                id: fieldValue,
+                gx, gy,
+                x: displayCoords.x,
+                y: displayCoords.y,
+                region: getRegionByCoords(displayCoords.x, displayCoords.y)
+            };
+            
+            if (entity.__identifier === 'Transit_Station' && fieldValue) {
+                transitData.stations.push(item);
+            } else if (entity.__identifier === 'Sea_Route' && fieldValue) {
+                transitData.seaPorts.push(item);
+            } else if (entity.__identifier === 'Sky_Net' && fieldValue) {
+                transitData.airfields.push(item);
+            }
+        }
+    }
+    
+    console.log('[TRANSIT] 提取完成:', {
+        stations: transitData.stations.length,
+        seaPorts: transitData.seaPorts.length,
+        airfields: transitData.airfields.length
+    });
+}
+
+// 获取交通设施描述
+function getTransitDesc(id) {
+    const normalizedId = TRANSIT_ID_NORMALIZE[id] || id;
+    const infra = transitData.mapInfo?.transit_infrastructure || {};
+    return infra[normalizedId]?.desc || '';
+}
+
+// 获取交通设施显示名称
+function getTransitName(id) {
+    const normalizedId = TRANSIT_ID_NORMALIZE[id] || id;
+    return normalizedId.replace(/_/g, ' ');
+}
+
+/* --- TRANSIT 专用 SVG 图标 --- */
+const TransitIcons = {
+    loop: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="16" height="16" rx="2"/><path d="M4 11h16"/><path d="M12 3v8"/><circle cx="12" cy="16" r="1.5" fill="currentColor"/><path d="M8 19l-2 3"/><path d="M16 19l2 3"/></svg>`,
+    air: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 2L2 9.27l6.91 1 1.74 6.73 3.63-3.64L22 2z"/></svg>`,
+    sea: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="5" r="3"/><path d="M12 22V8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`,
+    lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+    here: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4.5 20.29l0.71 0.71L12 18l6.79 3l0.71-0.71L12 2z"/></svg>`
+};
+
+// 渲染 TRANSIT 页面（Remastered UI）
+async function renderTransitPage() {
+    const transitPage = document.getElementById('pg-transit');
+    if (!transitPage) return;
+    
+    if (!transitData.loaded) {
+        transitPage.innerHTML = `<div class="transit-loading"><div class="transit-empty">Initializing Navigation System...</div></div>`;
+        await loadTransitData();
+    }
+    
+    const playerX = currentMapCoords?.x || 0;
+    const playerY = currentMapCoords?.y || 0;
+    const playerRegion = getRegionByCoords(playerX, playerY);
+    
+    const atStation = transitData.stations.find(s => s.x === playerX && s.y === playerY);
+    const atSeaPort = transitData.seaPorts.find(s => s.x === playerX && s.y === playerY);
+    const atAirfield = transitData.airfields.find(s => s.x === playerX && s.y === playerY);
+    
+    const sortByDistance = (list) => {
+        return [...list].sort((a, b) => {
+            const distA = calcDistance(playerX, playerY, a.x, a.y);
+            return distA - calcDistance(playerX, playerY, b.x, b.y);
+        });
+    };
+    
+    const sortedStations = sortByDistance(transitData.stations);
+    const sortedSeaPorts = sortByDistance(transitData.seaPorts);
+    const sortedAirfields = sortByDistance(transitData.airfields);
+    
+    transitPage.innerHTML = `
+        <div class="team-header-dash">
+            <div class="th-title">TRANSIT LINK</div>
+            <div class="th-status-grp">
+                <div class="th-count">${playerRegion} <small>DISTRICT</small></div>
+            </div>
+        </div>
+        
+        <div class="transit-tabs">
+            <div class="transit-tab active" data-tab="loop" onclick="switchTransitTab('loop')">
+                <span>${TransitIcons.loop} LOOP-LINE</span>
+            </div>
+            <div class="transit-tab" data-tab="air" onclick="switchTransitTab('air')">
+                <span>${TransitIcons.air} AIR-NET</span>
+            </div>
+            <div class="transit-tab" data-tab="sea" onclick="switchTransitTab('sea')">
+                <span>${TransitIcons.sea} SEAPORT</span>
+            </div>
+        </div>
+        
+        <div class="transit-content">
+            <div class="transit-panel" id="transit-loop" style="display:block;">
+                ${renderTransitListV2(sortedStations, 'loop', playerRegion, atStation)}
+            </div>
+            <div class="transit-panel" id="transit-air" style="display:none;">
+                ${renderTransitListV2(sortedAirfields, 'air', playerRegion, atAirfield)}
+            </div>
+            <div class="transit-panel" id="transit-sea" style="display:none;">
+                ${renderTransitListV2(sortedSeaPorts, 'sea', playerRegion, atSeaPort)}
+            </div>
+        </div>
+        <div style="height:40px;"></div>
+    `;
+}
+
+function renderTransitListV2(list, type, playerRegion, atStation) {
+    if (!list || list.length === 0) {
+        return `<div class="transit-empty">NO CONNECTION SIGNAL FOUND</div>`;
+    }
+    
+    const playerX = currentMapCoords?.x || 0;
+    const playerY = currentMapCoords?.y || 0;
+    const currentZone = list.filter(s => s.region === playerRegion);
+    const otherZone = list.filter(s => s.region !== playerRegion);
+    
+    let html = '';
+    
+    if (currentZone.length > 0) {
+        const zoneName = ZoneDB[playerRegion]?.name || playerRegion;
+        html += `<div class="transit-section">
+            <div class="transit-section-title curr">
+                <span class="section-marker"></span> ${zoneName} / LOCAL
+            </div>`;
+        currentZone.forEach(station => {
+            const gridDist = calcDistance(playerX, playerY, station.x, station.y);
+            const distKm = gridDist * 0.4;
+            const isHere = gridDist === 0;
+            const canClick = !atStation || isHere;
+            html += renderTransitItemV2(station, type, gridDist, distKm, isHere, canClick);
+        });
+        html += `</div>`;
+    }
+    
+    if (otherZone.length > 0) {
+        html += `<div class="transit-section">
+            <div class="transit-section-title othe">
+                <span class="section-marker"></span> EXTERNAL ZONES
+            </div>`;
+        otherZone.forEach(station => {
+            const gridDist = calcDistance(playerX, playerY, station.x, station.y);
+            const distKm = gridDist * 0.4;
+            const canClick = !!atStation;
+            html += renderTransitItemV2(station, type, gridDist, distKm, false, canClick);
+        });
+        html += `</div>`;
+    }
+    
+    return html;
+}
+
+function renderTransitItemV2(station, type, gridDist, distKm, isHere, canClick) {
+    const name = getTransitName(station.id);
+    const regionInfo = ZoneDB[station.region] || { name: station.region, color: '#636e72' };
+    const statusClass = isHere ? 'here' : (canClick ? 'available' : 'locked');
+    const clickAttr = canClick ? `onclick="handleTransitClick('${station.id}', ${station.x}, ${station.y}, '${type}')"` : '';
+    const bgIcon = TransitIcons[type] || '';
+    let badgeHtml = '';
+    
+    if (isHere) {
+        badgeHtml = `<div class="ti-status-badge ti-here-badge">${TransitIcons.here} <span>HERE</span></div>`;
+    } else if (canClick) {
+        const displayDist = distKm >= 10 ? distKm.toFixed(0) : distKm.toFixed(1);
+        badgeHtml = `<div class="ti-status-badge ti-dist-badge"><span class="ti-dist-val">${displayDist}</span><span class="ti-dist-unit">KM</span></div>`;
+    } else {
+        badgeHtml = `<div class="ti-status-badge ti-lock-badge">${TransitIcons.lock}</div>`;
+    }
+    
+    let accColor = '#dfe6e9';
+    if (type === 'loop') accColor = '#00b894';
+    if (type === 'air') accColor = '#0984e3';
+    if (type === 'sea') accColor = '#6c5ce7';
+    
+    return `
+    <div class="transit-item ${statusClass}" ${clickAttr} data-type="${type}" style="--acc-color:${accColor}">
+        <div class="transit-back-deco">${bgIcon}</div>
+        <div class="ti-left">
+            <div class="ti-icon">${bgIcon}</div>
+            <div class="ti-info">
+                <div class="ti-name">${name}</div>
+                <div class="ti-meta">
+                    <span class="ti-region" style="color:${regionInfo.color}">:: Zone-${station.region}</span>
+                    <span style="opacity:0.3">|</span>
+                    <span>[${station.x}, ${station.y}]</span>
+                </div>
+            </div>
+        </div>
+        <div class="ti-right">
+            ${badgeHtml}
+        </div>
+    </div>`;
+}
+
+// 切换 Tab
+window.switchTransitTab = function(tab) {
+    document.querySelectorAll('.transit-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.transit-panel').forEach(p => p.style.display = 'none');
+    
+    document.querySelector(`.transit-tab[data-tab="${tab}"]`)?.classList.add('active');
+    document.getElementById(`transit-${tab}`).style.display = 'block';
+};
+
+// 处理站点点击
+window.handleTransitClick = function(stationId, destX, destY, type) {
+    const playerX = currentMapCoords?.x || 0;
+    const playerY = currentMapCoords?.y || 0;
+    
+    // 检查是否在站点上
+    const atStation = transitData.stations.find(s => s.x === playerX && s.y === playerY);
+    const atSeaPort = transitData.seaPorts.find(s => s.x === playerX && s.y === playerY);
+    const atAirfield = transitData.airfields.find(s => s.x === playerX && s.y === playerY);
+    const isAtAnyStation = atStation || atSeaPort || atAirfield;
+    
+    const destRegion = getRegionByCoords(destX, destY);
+    const playerRegion = getRegionByCoords(playerX, playerY);
+    const stationName = getTransitName(stationId);
+    
+    // 生成 VariableEdit 更新坐标
+    const variableEditData = {
+        world_state: {
+            location: {
+                x: destX,
+                y: destY,
+                region: destRegion
+            }
+        }
+    };
+    const variableEditBlock = `<VariableEdit>\n${JSON.stringify(variableEditData, null, 2)}\n</VariableEdit>`;
+    
+    let promptText = '';
+    
+    // 判断是步行到站点还是搭乘交通工具
+    if (destRegion === playerRegion) {
+        // 同区域：步行前往站点
+        promptText = `【前往站点】
+从: 当前位置 [${playerX}, ${playerY}]
+至: ${stationName} [${destX}, ${destY}]
+方式: 步行
+区域: ${ZoneDB[destRegion]?.name || destRegion}
+
+玩家步行前往 ${stationName}。
+
+${variableEditBlock}`;
+    } else {
+        // 跨区域：必须在站点上，搭乘交通工具
+        if (!isAtAnyStation) {
+            showCopyNotification('ACCESS DENIED', '必须在站点才能前往其他区域', false);
+            return;
+        }
+        
+        const typeName = type === 'loop' ? '环线列车' : type === 'air' ? '空运飞行' : '港口航线';
+        const fromStation = getTransitName((atStation || atSeaPort || atAirfield).id);
+        
+        promptText = `【交通移动】
+从: ${fromStation} [${playerX}, ${playerY}]
+至: ${stationName} [${destX}, ${destY}]
+方式: ${typeName}
+区域: ${ZoneDB[playerRegion]?.name || playerRegion} → ${ZoneDB[destRegion]?.name || destRegion}
+
+玩家搭乘${typeName}从 ${fromStation} 前往 ${stationName}。
+
+${variableEditBlock}`;
+    }
+
+    // 复制到剪贴板
+    navigator.clipboard.writeText(promptText).then(() => {
+        const actionType = destRegion === playerRegion ? '步行' : (type === 'loop' ? '环线' : type === 'air' ? '空运' : '海运');
+        showCopyNotification('ROUTE COPIED', `${actionType} → ${stationName}`, true);
+    }).catch(() => {
+        showCopyNotification('COPY FAILED', '无法复制到剪贴板', false);
+    });
+};
+
+/* ============================================================
    RENDER SOCIAL LIST (NPC grid)
    ============================================================ */
 function renderSocialList() {
@@ -1872,7 +2279,7 @@ function renderDashboard() {
 
             <!-- 右侧堆叠区：战术插片 (Tactical Blades) -->
             <div class="stack-col">
-                <div class="live-tile box-tactical theme-amber small-h user-select-none disabled" onclick="handleTileClick('transit')">
+                <div class="live-tile box-tactical theme-amber small-h user-select-none" onclick="handleTileClick('transit')">
                     <div class="t-decoration">
                          <div class="t-watermark">${SystemIcons.transit}</div>
                          <div class="t-stripe"></div>
@@ -1960,12 +2367,17 @@ window.handleTileClick = function(tileId) {
         'box': 'box',
         'social': 'social',
         'settings': 'settings',
-        'party': 'party'
+        'party': 'party',
+        'transit': 'transit'
     };
     
     const targetPage = pageMap[tileId];
     if (targetPage) {
         openAppPage(targetPage);
+        // 如果是 transit 页面，需要渲染
+        if (targetPage === 'transit') {
+            renderTransitPage();
+        }
     }
 };
 

@@ -6138,7 +6138,7 @@ function getZoneCharacters(zoneCode) {
 }
 
 /**
- * 生成区域状态卡文本（凝练版）
+ * 生成区域状态卡文本（仅 NPC 舒适度，不含区域描述）
  * @param {string} zoneCode - 区域代码 (N/B/S/A/Z)
  * @returns {string} - 格式化的状态卡文本
  */
@@ -6148,11 +6148,9 @@ function generateZoneStatusCard(zoneCode) {
     
     const chars = getZoneCharacters(zoneCode);
     
-    let card = `<pkm_zone_info>
-[LOC] 洛迪亚 · ${zone.name_cn} (${zone.name_en})
-治安: ${zone.security} - ${zone.security_note}
-地标: ${zone.landmarks}
-粉雾: ${zone.mist}
+    // 仅显示区域名称和 NPC 舒适度，不显示区域详细描述
+    let card = `<pkm_zone_npc_comfort>
+[当前区域] ${zone.name_cn} (${zoneCode})
 ---
 [主场势力] (舒适度=3，大概率已在场):`;
 
@@ -6177,9 +6175,7 @@ function generateZoneStatusCard(zoneCode) {
         });
     }
     
-    card += `\n---
-注: 以上仅为作为剧情参考的信息，不是实际的情况。不应该过度引入，适当把握
-</pkm_zone_info>`;
+    card += `注: 以上仅为作为剧情参考的信息，不是实际的情况。不应该过度引入，适当把握\n</pkm_zone_npc_comfort>`;
     
     return card;
 }
@@ -9572,7 +9568,12 @@ ${inventorySection}${boxSection}
       const eraVars = await getEraVars();
       const npcsState = getEraValue(eraVars, 'world_state.npcs', {});
       const playerBonds = getEraValue(eraVars, 'player.bonds', {});
-      const currentLocation = getEraValue(eraVars, 'world_state.location', 'Z');
+      
+      // 新格式: world_state.location 是对象 { region, x, y }
+      const locationData = getEraValue(eraVars, 'world_state.location', {});
+      const currentLocation = typeof locationData === 'object' 
+        ? (locationData.region || 'Z') 
+        : (locationData || 'Z');
       
       // 合并快照数据（快照优先，因为是最新的）
       const mergedNpcsState = {};
@@ -9599,7 +9600,7 @@ ${inventorySection}${boxSection}
       // 4. 生成状态卡
       const sections = [];
       
-      // 区域状态卡（始终显示当前区域信息）
+      // 区域 NPC 舒适度卡（始终显示当前区域的 NPC 舒适度信息）
       const zoneCard = generateZoneStatusCard(currentLocation);
       sections.push(zoneCard);
       
