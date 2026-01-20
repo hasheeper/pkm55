@@ -412,6 +412,53 @@
                 return labels[threat] || '未知';
             },
             
+            // 获取当前区域的所有 NPC 住址位置
+            getNpcLocationsInRegion(regionId) {
+                if (!this.mapData || !this.mapData.levels) return [];
+                
+                const npcLocations = [];
+                
+                for (const level of this.mapData.levels) {
+                    if (!level.layerInstances) continue;
+                    
+                    for (const layer of level.layerInstances) {
+                        if (layer.__identifier !== 'NPC_Actor') continue;
+                        if (!layer.entityInstances) continue;
+                        
+                        for (const entity of layer.entityInstances) {
+                            if (entity.__identifier !== 'NPC_Actor') continue;
+                            
+                            const gx = entity.__grid[0];
+                            const gy = entity.__grid[1];
+                            const displayCoords = this.toDisplayCoords(gx, gy);
+                            const npcRegion = this.getRegionByCoords(displayCoords.x, displayCoords.y);
+                            
+                            // 获取 NPC ID
+                            let npcId = null;
+                            for (const field of entity.fieldInstances || []) {
+                                if (field.__identifier === 'NPC_Actor') {
+                                    npcId = field.__value;
+                                    break;
+                                }
+                            }
+                            
+                            if (npcId && npcRegion === regionId) {
+                                npcLocations.push({
+                                    id: npcId,
+                                    gx: gx,
+                                    gy: gy,
+                                    displayX: displayCoords.x,
+                                    displayY: displayCoords.y,
+                                    desc: this.npcContext[npcId]?.desc || null
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                return npcLocations;
+            },
+            
             // 显示坐标转内部格子坐标（与 game.js 的 toInternalCoords 一致）
             toInternalCoords(displayX, displayY) {
                 // 地图中心点（内部坐标）- 与 map/game.js 保持一致
@@ -684,6 +731,17 @@
                     const skyDesc = this.transitInfra[normalizedId];
                     lines.push(`【空运停机坪】${skyDesc?.name || normalizedId.replace(/_/g, ' ')}`);
                     if (skyDesc?.desc) lines.push(`  ${skyDesc.desc}`);
+                }
+                
+                // ========== 当前区域 NPC 住址列表 ==========
+                const npcLocations = this.getNpcLocationsInRegion(regionId);
+                if (npcLocations.length > 0) {
+                    lines.push('');
+                    lines.push(`【${regionInfo?.name || regionId} NPC住址】`);
+                    for (const npc of npcLocations) {
+                        const npcName = npc.id.replace(/_/g, ' ');
+                        lines.push(`  • ${npcName} [${npc.displayX}, ${npc.displayY}]`);
+                    }
                 }
                 
                 // ========== 周围环境（半径2格）==========
