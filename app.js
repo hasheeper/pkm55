@@ -530,13 +530,30 @@ ${variableEditBlock}`;
 ${variableEditBlock}`;
     }
 
-    // 复制到剪贴板
-    navigator.clipboard.writeText(promptText).then(() => {
-        const actionType = destRegion === playerRegion ? '步行' : (type === 'loop' ? '环线' : type === 'air' ? '空运' : '海运');
-        showCopyNotification('ROUTE COPIED', `${actionType} → ${stationName}`, true);
-    }).catch(() => {
+    // 复制到剪贴板（使用兼容 iframe 的方法）
+    const actionType = destRegion === playerRegion ? '步行' : (type === 'loop' ? '环线' : type === 'air' ? '空运' : '海运');
+    
+    // 创建临时 textarea 元素
+    const textarea = document.createElement('textarea');
+    textarea.value = promptText;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showCopyNotification('ROUTE COPIED', `${actionType} → ${stationName}`, true);
+        } else {
+            showCopyNotification('COPY FAILED', '无法复制到剪贴板', false);
+        }
+    } catch (err) {
+        console.error('[TRANSIT] 复制失败:', err);
         showCopyNotification('COPY FAILED', '无法复制到剪贴板', false);
-    });
+    } finally {
+        document.body.removeChild(textarea);
+    }
 };
 
 /* ============================================================
