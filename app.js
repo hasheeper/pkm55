@@ -2490,15 +2490,17 @@ let currentMapCoords = { x: 0, y: 0 };
 
 // 根据坐标自动判断象限
 function getQuadrantFromCoords(x, y) {
-    if (x > 0 && y > 0) return "S";     // 东北 NE
-    if (x < 0 && y > 0) return "A";     // 西北 NW
-    if (x < 0 && y < 0) return "B";     // 西南 SW
-    if (x > 0 && y < 0) return "N";     // 东南 SE
-    if (x === 0 && y > 0) return "A/S";
-    if (x === 0 && y < 0) return "B/N";
-    if (y === 0 && x > 0) return "S/N";
-    if (y === 0 && x < 0) return "A/B";
-    return "Z"; // 原点或未知
+    // Z区（中枢区）：中心 6x6 范围
+    if (Math.abs(x) <= 6 && Math.abs(y) <= 6) return "Z";
+    // N区（霓虹区）：东南象限
+    if (x > 0 && y < 0) return "N";
+    // B区（海滨区）：西南象限
+    if (x < 0 && y < 0) return "B";
+    // S区（暗影区）：东北象限
+    if (x > 0 && y > 0) return "S";
+    // A区（极诣区）：西北象限
+    if (x < 0 && y > 0) return "A";
+    return "Z";
 }
 
 // 更新 Dashboard 磁贴坐标显示
