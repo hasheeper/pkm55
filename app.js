@@ -867,14 +867,28 @@ function initStickyStatusBar() {
     const bar = document.createElement('div');
     bar.id = 'sticky-status-bar';
     bar.className = 'p-status-bar';
+    // 计算信号强度
+    const playerX = db?.world_state?.location?.x || 0;
+    const playerY = db?.world_state?.location?.y || 0;
+    const signalStatus = isInSignalCoverage(playerX, playerY);
+    let signalBars = 1; // 默认1格
+    if (signalStatus.covered) {
+        if (signalStatus.reason === 'ZENITH_FULL_COVERAGE') {
+            signalBars = 4; // Z区满格
+        } else {
+            signalBars = 4; // PC终端范围内也满格
+        }
+    }
+    
+    const signalBarsHTML = Array.from({length: 4}, (_, i) => 
+        `<div class="n-bar ${i < signalBars ? 'active' : ''}"></div>`
+    ).join('');
+    
     bar.innerHTML = `
         <div class="ps-left">
             <div class="net-group">
                 <div class="net-signal">
-                    <div class="n-bar"></div>
-                    <div class="n-bar"></div>
-                    <div class="n-bar"></div>
-                    <div class="n-bar"></div>
+                    ${signalBarsHTML}
                 </div>
                 <span class="net-label">R-NET</span>
             </div>
@@ -907,11 +921,16 @@ function updateClock() {
     const clockEl = document.getElementById('sys-clock');
     if (!clockEl) return;
 
-    const now = new Date();
-    const timeStr = now
-        .toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-        .replace(/^0/, '');
-    clockEl.textContent = timeStr;
+    // 使用 ERA 游戏时间而非现实时间
+    const timeData = db?.world_state?.time;
+    if (timeData && timeData.period) {
+        // 显示格式: DAY1-早晨
+        const dayNum = timeData.derived?.dayOfYear || 1;
+        const period = timeData.period || '未知';
+        clockEl.textContent = `DAY${dayNum}-${period}`;
+    } else {
+        clockEl.textContent = 'DAY1-早晨';
+    }
 }
 
 function renderPartyList() {

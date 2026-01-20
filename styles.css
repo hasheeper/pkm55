@@ -2653,11 +2653,20 @@ body {
     width: 3px;
     background: #b2bec3;
     border-radius: 2px;
+    opacity: 0.3;
 }
 .n-bar:nth-child(1) { height: 40%; }
 .n-bar:nth-child(2) { height: 60%; }
-.n-bar:nth-child(3) { height: 80%; background: #636e72; }
-.n-bar:nth-child(4) { height: 100%; background: #636e72; }
+.n-bar:nth-child(3) { height: 80%; }
+.n-bar:nth-child(4) { height: 100%; }
+.n-bar.active {
+    opacity: 1;
+    background: #00b894;
+}
+.n-bar.active:nth-child(3),
+.n-bar.active:nth-child(4) {
+    background: #00b894;
+}
 
 .net-label {
     font-size: 0.75rem;
