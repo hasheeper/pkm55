@@ -897,6 +897,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const variableInsertJson = JSON.stringify(variableInsertData, null, 2);
                 const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                // 验证 JSON 格式（确保有最外层的 {}）
+                if (!variableEditJson.startsWith('{') || !variableEditJson.endsWith('}')) {
+                    console.error('[PKM] [TRANSFER] VariableEdit JSON 格式错误:', variableEditJson);
+                }
                 const variableInsertBlock = \`<VariableInsert>\\n\${variableInsertJson}\\n</VariableInsert>\`;
                 const variableEditBlock = \`<VariableEdit>\\n\${variableEditJson}\\n</VariableEdit>\`;
                 
@@ -997,6 +1001,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                // 验证 JSON 格式（确保有最外层的 {}）
+                if (!variableEditJson.startsWith('{') || !variableEditJson.endsWith('}')) {
+                    console.error('[PKM] [LEADER] VariableEdit JSON 格式错误:', variableEditJson);
+                }
                 const variableEditBlock = \`<VariableEdit>\\n\${variableEditJson}\\n</VariableEdit>\`;
                 
                 console.log('[PKM] [LEADER] 生成 VariableEdit:', variableEditBlock);
@@ -1065,6 +1073,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 
                 const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                // 验证 JSON 格式（确保有最外层的 {}）
+                if (!variableEditJson.startsWith('{') || !variableEditJson.endsWith('}')) {
+                    console.error('[PKM] [SETTINGS] VariableEdit JSON 格式错误:', variableEditJson);
+                }
                 const variableEditBlock = \`<VariableEdit>\n\${variableEditJson}\n</VariableEdit>\`;
                 
                 console.log('[PKM] [SETTINGS] 生成 VariableEdit:', variableEditBlock);

@@ -1641,6 +1641,10 @@
                 };
                 
                 const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                // 验证 JSON 格式（确保有最外层的 {}）
+                if (!variableEditJson.startsWith('{') || !variableEditJson.endsWith('}')) {
+                    console.error('[PKM] [REGION] VariableEdit JSON 格式错误:', variableEditJson);
+                }
                 const variableEditBlock = `<VariableEdit>\n${variableEditJson}\n</VariableEdit>`;
                 
                 console.log('[PKM] [REGION] 生成 VariableEdit:', variableEditBlock);
@@ -1889,11 +1893,38 @@ ${contextText}
         }
         
         // ========== 监听酒馆事件 ==========
+        // 防抖标志：防止 era:writeDone -> injectLocationContext -> ERA写入 -> era:writeDone 死循环
+        let isProcessingEraEvent = false;
+        let eraEventDebounceTimer = null;
+        const ERA_EVENT_DEBOUNCE_MS = 500; // 500ms 防抖
+        
         if (typeof eventOn !== 'undefined') {
             eventOn('era:writeDone', () => {
-                console.log('[PKM] 检测到 ERA 变量更新，刷新面板和位置注入');
-                refreshDashboard();
-                injectLocationContext(); // 刷新位置上下文注入
+                // 如果正在处理中，跳过（防止死循环）
+                if (isProcessingEraEvent) {
+                    console.log('[PKM] 跳过重复的 era:writeDone 事件（防抖中）');
+                    return;
+                }
+                
+                // 清除之前的防抖定时器
+                if (eraEventDebounceTimer) {
+                    clearTimeout(eraEventDebounceTimer);
+                }
+                
+                // 设置防抖定时器
+                eraEventDebounceTimer = setTimeout(async () => {
+                    isProcessingEraEvent = true;
+                    console.log('[PKM] 检测到 ERA 变量更新，刷新面板和位置注入');
+                    try {
+                        refreshDashboard();
+                        await injectLocationContext();
+                    } finally {
+                        // 延迟重置标志，确保后续的 writeDone 事件被跳过
+                        setTimeout(() => {
+                            isProcessingEraEvent = false;
+                        }, 200);
+                    }
+                }, 100); // 100ms 后执行，合并快速连续的事件
             });
             
             eventOn('generation_ended', () => {
@@ -2061,6 +2092,10 @@ ${contextText}
                 }
                 
                 const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                // 验证 JSON 格式（确保有最外层的 {}）
+                if (!variableEditJson.startsWith('{') || !variableEditJson.endsWith('}')) {
+                    console.error('[PKM] [LEADER] VariableEdit JSON 格式错误:', variableEditJson);
+                }
                 const variableEditBlock = `<VariableEdit>\n${variableEditJson}\n</VariableEdit>`;
                 
                 console.log('[PKM] [LEADER] 生成 VariableEdit:', variableEditBlock);

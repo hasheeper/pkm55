@@ -486,7 +486,14 @@ window.handleTransitClick = function(stationId, destX, destY, type) {
             }
         }
     };
-    const variableEditBlock = `<VariableEdit>\n${JSON.stringify(variableEditData, null, 2)}\n</VariableEdit>`;
+    // 确保 JSON 格式正确（包含最外层的 {}）
+    const jsonStr = JSON.stringify(variableEditData, null, 2);
+    const variableEditBlock = `<VariableEdit>\n${jsonStr}\n</VariableEdit>`;
+    
+    // 验证格式
+    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
+        console.error('[TRANSIT] VariableEdit JSON 格式错误:', jsonStr);
+    }
     
     let promptText = '';
     
