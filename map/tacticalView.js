@@ -1540,13 +1540,15 @@ const TacticalSystem = {
     _generateMoveChangeText: function(fromInfo, toInfo) {
         const lines = [];
         
-        // VariableEdit 部分 - 使用正确的 ERA 格式
+        // VariableEdit 部分 - 使用正确的 ERA 格式（必须有外部 {} 闭合）
         lines.push('<VariableEdit>');
-        lines.push(`"world_state": {`);
+        lines.push(`{`);
+        lines.push(`  "world_state": {`);
         lines.push(`    "location": {`);
-        lines.push(`        "x": ${toInfo.displayX},`);
-        lines.push(`        "y": ${toInfo.displayY}`);
+        lines.push(`      "x": ${toInfo.displayX},`);
+        lines.push(`      "y": ${toInfo.displayY}`);
         lines.push(`    }`);
+        lines.push(`  }`);
         lines.push(`}`);
         lines.push('</VariableEdit>');
         lines.push('');
@@ -1602,9 +1604,9 @@ const TacticalSystem = {
             lines.push('');
             lines.push('【目标区域宝可梦】');
             destPokemon.forEach(poke => {
-                const levelRange = poke.level_range ? ` Lv.${poke.level_range}` : '';
+                const levelStr = poke.level ? ` Lv.${poke.level}` : '';
                 const rarity = poke.rarity ? ` (${poke.rarity})` : '';
-                lines.push(`  • ${poke.name}${levelRange}${rarity}`);
+                lines.push(`  • ${poke.id || poke.name || '未知'}${levelStr}${rarity}`);
             });
         }
         

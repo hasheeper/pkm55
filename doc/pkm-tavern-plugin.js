@@ -6175,7 +6175,7 @@ function generateZoneStatusCard(zoneCode) {
         });
     }
     
-    card += `注: 以上仅为作为剧情参考的信息，不是实际的情况。不应该过度引入，适当把握\n</pkm_zone_npc_comfort>`;
+    card += `\n注: 以上仅为作为剧情参考的信息，不是实际的情况。不应该过度引入，适当把握\n</pkm_zone_npc_comfort>`;
     
     return card;
 }
