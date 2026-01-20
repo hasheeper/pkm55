@@ -140,35 +140,56 @@ window.setPlayerPosition = function(displayCoords) {
 window.onMapReady = null;
 
 // ========== 接收酒馆 ERA 数据（宝可梦刷新等）==========
+// 防抖定时器，避免频繁刷新导致卡顿
+let eraRefreshDebounceTimer = null;
+
 window.addEventListener('message', function(event) {
     // 处理 PKM_ERA_DATA（初始化）和 PKM_REFRESH（刷新）
     if (event.data && (event.data.type === 'PKM_ERA_DATA' || event.data.type === 'PKM_REFRESH')) {
         const eraData = event.data.data;
+        const isRefresh = event.data.type === 'PKM_REFRESH';
+        
         console.log('[MAP] 收到 ERA 数据:', event.data.type, eraData);
         
-        // 更新宝可梦缓存（从 ERA 读取）
+        // 更新宝可梦缓存（从 ERA 读取）- 这个可以立即执行
         if (window.PokemonSpawnCache && eraData?.world_state?.pokemon_spawns) {
             window.PokemonSpawnCache.updateFromEra(eraData);
         }
         
-        // 更新玩家位置（如果有）
-        if (eraData?.world_state?.location) {
-            const loc = eraData.world_state.location;
-            if (typeof loc.x === 'number' && typeof loc.y === 'number') {
-                window.setPlayerPosition({ x: loc.x, y: loc.y });
-                
-                // 同步更新 TacticalSystem 的 playerGrid
-                if (window.TacticalSystem && window.TacticalSystem.isActive) {
-                    const internal = toInternalCoords(loc.x, loc.y);
-                    window.TacticalSystem.playerGrid = { x: internal.gx, y: internal.gy };
-                    window.TacticalSystem.anchor = { x: internal.gx, y: internal.gy };
-                    window.TacticalSystem.render();
-                    console.log('[MAP] TacticalSystem 位置已同步:', internal);
-                }
+        // 对于刷新消息，使用防抖避免频繁更新位置和渲染
+        if (isRefresh) {
+            if (eraRefreshDebounceTimer) {
+                clearTimeout(eraRefreshDebounceTimer);
             }
+            eraRefreshDebounceTimer = setTimeout(() => {
+                updatePlayerFromEra(eraData);
+                eraRefreshDebounceTimer = null;
+            }, 200); // 200ms 防抖
+        } else {
+            // 初始化消息立即执行
+            updatePlayerFromEra(eraData);
         }
     }
 });
+
+// 从 ERA 数据更新玩家位置
+function updatePlayerFromEra(eraData) {
+    if (eraData?.world_state?.location) {
+        const loc = eraData.world_state.location;
+        if (typeof loc.x === 'number' && typeof loc.y === 'number') {
+            window.setPlayerPosition({ x: loc.x, y: loc.y });
+            
+            // 同步更新 TacticalSystem 的 playerGrid（不调用 render，让现有循环处理）
+            if (window.TacticalSystem && window.TacticalSystem.isActive) {
+                const internal = toInternalCoords(loc.x, loc.y);
+                window.TacticalSystem.playerGrid = { x: internal.gx, y: internal.gy };
+                window.TacticalSystem.anchor = { x: internal.gx, y: internal.gy };
+                // 不再调用 render()，因为渲染循环已经在运行
+                console.log('[MAP] TacticalSystem 位置已同步:', internal);
+            }
+        }
+    }
+}
 
 // 缓存与状态 - 延迟初始化以确保 DOM 准备好
 let canvas, ctx, tooltip, toggleContainer, playerControls, playerCoordsEl;

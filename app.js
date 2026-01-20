@@ -726,18 +726,42 @@ window.addEventListener('message', function(event) {
             db = event.data.data;
             window.eraData = db;
             
-            // 先更新坐标，再渲染
-            if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
-            
-            // 刷新界面
-            if (typeof renderDashboard === 'function') renderDashboard();
-            if (typeof renderPartyList === 'function') renderPartyList();
-            
-            // 转发 ERA 数据到 map iframe
-            forwardEraToMap(event.data);
+            // 使用防抖避免频繁刷新导致卡顿
+            handleRefreshDebounced(event.data);
         }
     }
 });
+
+// 防抖刷新处理
+let refreshDebounceTimer = null;
+function handleRefreshDebounced(eventData) {
+    // 清除之前的定时器
+    if (refreshDebounceTimer) {
+        clearTimeout(refreshDebounceTimer);
+    }
+    
+    // 延迟 100ms 执行，合并快速连续的刷新请求
+    refreshDebounceTimer = setTimeout(() => {
+        console.log('[PKM] 执行防抖刷新...');
+        
+        // 先更新坐标，再渲染
+        if (typeof updateCoordsFromEra === 'function') updateCoordsFromEra();
+        if (typeof ensureSettingsDefaults === 'function') ensureSettingsDefaults();
+        
+        // 刷新所有界面
+        if (typeof renderDashboard === 'function') renderDashboard();
+        if (typeof renderPartyList === 'function') renderPartyList();
+        if (typeof renderSocialList === 'function') renderSocialList();
+        if (typeof renderSettings === 'function') renderSettings();
+        if (typeof renderBoxPage === 'function') renderBoxPage();
+        if (typeof updateClock === 'function') updateClock();
+        
+        // 转发 ERA 数据到 map iframe
+        forwardEraToMap(eventData);
+        
+        refreshDebounceTimer = null;
+    }, 100);
+}
 
 // 转发 ERA 数据到 map iframe
 function forwardEraToMap(message) {
@@ -810,25 +834,9 @@ function initApp() {
     renderSocialList();
     renderSettings();
     renderBoxPage();
-
-    // 监听父窗口的刷新消息
-    window.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'PKM_REFRESH') {
-            console.log('[PKM] 收到刷新消息，更新数据...');
-            db = event.data.data;
-            ensureSettingsDefaults();
-            
-            // 先更新坐标，再渲染
-            updateCoordsFromEra();
-            
-            renderDashboard();
-            renderPartyList();
-            renderSocialList();
-            renderSettings();
-            renderBoxPage();
-            updateClock();
-        }
-    });
+    
+    // 注意：PKM_REFRESH 消息监听已在全局 message 事件处理器中处理（第 703 行）
+    // 不要在这里重复绑定，否则会导致多次渲染和卡顿
 }
 
 // 从 ERA 数据更新坐标显示

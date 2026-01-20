@@ -198,6 +198,7 @@ function hexToRgba(hex, alphaMulti = 1) {
 
 const TacticalSystem = {
     isActive: false,
+    _renderLoopActive: false, // 防止多个渲染循环叠加
 
     imgCache: {},
     
@@ -231,6 +232,7 @@ const TacticalSystem = {
 
     exit: function() {
         this.isActive = false;
+        this._renderLoopActive = false; // 重置渲染循环标志
         this.unbindEvents();
         this.ctx.setTransform(1,0,0,1,0,0);
         if(window.resumeGlobalMap) window.resumeGlobalMap();
@@ -356,7 +358,28 @@ const TacticalSystem = {
 
     // --- MAIN RENDER ---
     render: function() {
-        if(!this.isActive) return;
+        if(!this.isActive) {
+            this._renderLoopActive = false;
+            return;
+        }
+        
+        // 如果渲染循环已经在运行，不要启动新的循环
+        // 只有首次调用或循环结束后才启动新循环
+        if(this._renderLoopActive) {
+            return; // 已有循环在运行，跳过
+        }
+        
+        this._renderLoopActive = true;
+        this._doRender();
+    },
+    
+    // 实际渲染逻辑（内部循环调用）
+    _doRender: function() {
+        if(!this.isActive) {
+            this._renderLoopActive = false;
+            return;
+        }
+        
         const ctx = this.ctx;
         const { w, h } = this;
 
@@ -399,7 +422,7 @@ const TacticalSystem = {
 
         if(this.hoverData) this.drawSidePanel(ctx);
 
-        requestAnimationFrame(() => this.render());
+        requestAnimationFrame(() => this._doRender());
     },
 
     // 🏆 Draw Tile UI (核心: 每一个方块就是一个仪表盘)

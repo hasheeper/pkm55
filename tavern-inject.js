@@ -1868,28 +1868,31 @@ ${contextText}
         });
         
         // ========== 刷新函数 ==========
+        let refreshDashboardTimer = null;
         async function refreshDashboard() {
-            console.log('[PKM] 刷新面板数据...');
-            const eraData = await getEraVars();
-            if (!eraData) return;
-            
-            const message = { type: 'PKM_REFRESH', data: eraData };
-            
-            // 发送到隐藏的 iframe（后台数据同步）
-            if (hiddenIframeLoaded && hiddenIframe[0] && hiddenIframe[0].contentWindow) {
-                try {
-                    hiddenIframe[0].contentWindow.postMessage(message, '*');
-                    console.log('[PKM] ✓ 已发送刷新数据到隐藏 iframe');
-                } catch (e) {}
+            // 防抖：避免频繁刷新导致卡顿
+            if (refreshDashboardTimer) {
+                clearTimeout(refreshDashboardTimer);
             }
             
-            // 发送到显示的 iframe（如果已加载）
-            if (visibleIframeLoaded && iframe[0] && iframe[0].contentWindow) {
-                try {
-                    iframe[0].contentWindow.postMessage(message, '*');
-                    console.log('[PKM] ✓ 已发送刷新数据到显示 iframe');
-                } catch (e) {}
-            }
+            refreshDashboardTimer = setTimeout(async () => {
+                console.log('[PKM] 刷新面板数据...');
+                const eraData = await getEraVars();
+                if (!eraData) return;
+                
+                const message = { type: 'PKM_REFRESH', data: eraData };
+                
+                // 只发送到显示的 iframe（如果已加载且面板打开）
+                // 隐藏 iframe 不需要频繁刷新，只在初始化时同步
+                if (visibleIframeLoaded && iframe[0] && iframe[0].contentWindow) {
+                    try {
+                        iframe[0].contentWindow.postMessage(message, '*');
+                        console.log('[PKM] ✓ 已发送刷新数据到显示 iframe');
+                    } catch (e) {}
+                }
+                
+                refreshDashboardTimer = null;
+            }, 150); // 150ms 防抖
         }
         
         // ========== 监听酒馆事件 ==========
