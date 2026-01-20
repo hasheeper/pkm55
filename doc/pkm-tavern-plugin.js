@@ -9922,6 +9922,8 @@ ${sections.join('\n\n')}
         if (targetIdx < currentIdx) {
           newDay += 1;
           console.log(`${PLUGIN_NAME} [TIME] 时段设置跨天: DAY ${newDay - 1} → DAY ${newDay}`);
+          // 设置宝可梦刷新标志
+          window._pkmPendingPokemonRefresh = true;
         }
         
         newPeriod = targetPeriod;
@@ -9942,6 +9944,16 @@ ${sections.join('\n\n')}
       // 更新派生时间信息（供 AI 参考）
       const derived = calculateDerivedTime(newDay);
       updateData['world_state.time.derived'] = derived;
+      
+      // ========== 如果日期变化，触发宝可梦刷新 ==========
+      if (newDay > timeState.day) {
+        console.log(`${PLUGIN_NAME} [TIME] 日期变化，触发宝可梦刷新事件`);
+        // 使用事件通信触发刷新（跨 iframe）
+        eventEmit('pkm:refreshPokemonSpawns', { 
+          oldDay: timeState.day, 
+          newDay: newDay 
+        });
+      }
     }
     
     // 应用更新

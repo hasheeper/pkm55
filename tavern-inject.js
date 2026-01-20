@@ -1570,7 +1570,8 @@
             },
             
             // 为玩家周围区域生成宝可梦（半径2格）
-            async generateForNearbyGrids(x, y, eraVars) {
+            // forceRefresh: 强制刷新，忽略已有数据（用于每日刷新）
+            async generateForNearbyGrids(x, y, eraVars, forceRefresh = false) {
                 await LocationContextBackend.loadData();
                 
                 const spawnTablesData = LocationContextBackend.spawnTablesData;
@@ -1583,8 +1584,8 @@
                 const centerGx = internal.gx;
                 const centerGy = internal.gy;
                 
-                // 获取当前 ERA 中已存在的宝可梦区域
-                const existingSpawns = eraVars?.world_state?.pokemon_spawns || {};
+                // 获取当前 ERA 中已存在的宝可梦区域（强制刷新时忽略）
+                const existingSpawns = forceRefresh ? {} : (eraVars?.world_state?.pokemon_spawns || {});
                 
                 // 半径2格的所有格子（与地标范围一致）
                 const offsets = [
@@ -1601,7 +1602,7 @@
                     const gy = centerGy + dy;
                     const key = this.getLocationKey(gx, gy);
                     
-                    // 只增不改：如果已存在则跳过
+                    // 只增不改：如果已存在则跳过（强制刷新时不跳过）
                     if (existingSpawns[key]) {
                         continue;
                     }
@@ -1675,13 +1676,67 @@
             console.log('[PKM] ✓ 宝可梦区域已注入 ERA:', Object.keys(newSpawns));
         }
         
-        // 清除宝可梦区域数据（每日刷新）
-        async function eraDeletePokemonSpawns() {
-            // 使用 updateEraVars 将 pokemon_spawns 设为空对象
-            updateEraVars({
-                'world_state.pokemon_spawns': {}
-            });
-            console.log('[PKM] ✓ 宝可梦区域已清除（每日刷新）');
+        // 刷新宝可梦区域数据（每日刷新）- 先删除再插入，合并成一个消息操作
+        async function eraRefreshPokemonSpawns(newSpawns) {
+            try {
+                // 构建 VariableDelete 块
+                const variableDeleteData = {
+                    world_state: {
+                        pokemon_spawns: {}
+                    }
+                };
+                const variableDeleteJson = JSON.stringify(variableDeleteData, null, 2);
+                const variableDeleteBlock = `<VariableDelete>\n${variableDeleteJson}\n</VariableDelete>`;
+                
+                // 构建 VariableInsert 块（如果有新数据）
+                let variableInsertBlock = '';
+                if (newSpawns && Object.keys(newSpawns).length > 0) {
+                    const variableInsertData = {
+                        world_state: {
+                            pokemon_spawns: newSpawns
+                        }
+                    };
+                    const variableInsertJson = JSON.stringify(variableInsertData, null, 2);
+                    variableInsertBlock = `<VariableInsert>\n${variableInsertJson}\n</VariableInsert>`;
+                }
+                
+                console.log('[PKM] [POKEMON] 生成 VariableDelete + VariableInsert（每日刷新）');
+                
+                // 获取最近一楼消息ID
+                const messageId = getLastMessageId();
+                if (!messageId) {
+                    console.warn('[PKM] [POKEMON] 无法获取最近消息ID，跳过刷新');
+                    return false;
+                }
+                
+                // 获取消息内容
+                const messages = getChatMessages(messageId);
+                if (!messages || messages.length === 0) {
+                    console.warn('[PKM] [POKEMON] 无法获取消息内容，跳过刷新');
+                    return false;
+                }
+                
+                const msg = messages[0];
+                let content = msg.message || '';
+                
+                // 先删除再插入，合并追加到消息末尾
+                content = content.trim() + '\n\n' + variableDeleteBlock;
+                if (variableInsertBlock) {
+                    content += '\n' + variableInsertBlock;
+                }
+                
+                // 更新消息
+                await setChatMessages([{
+                    message_id: messageId,
+                    message: content
+                }], { refresh: 'affected' });
+                
+                console.log('[PKM] ✓ 宝可梦区域已刷新（删除+插入）:', Object.keys(newSpawns || {}));
+                return true;
+            } catch (e) {
+                console.error('[PKM] [POKEMON] 刷新失败:', e);
+                return false;
+            }
         }
         
         // 记录上次的游戏日期，用于检测日期变化
@@ -1785,22 +1840,17 @@
                     lastRegionCode = currentRegion;
                 }
                 
-                // ========== 检测日期变化，清除宝可梦刷新 ==========
-                // 时间路径: world_state.time.day（参考 pkm-tavern-plugin.js）
+                // ========== 为玩家周围区域生成宝可梦（只增不改）==========
+                // 注意：日期变化时的刷新（删除+插入）由 pkm:refreshPokemonSpawns 事件处理
                 const currentDay = eraVars?.world_state?.time?.day;
-                if (lastGameDay !== null && currentDay !== null && currentDay > lastGameDay) {
-                    console.log('[PKM] 检测到日期变化，清除宝可梦刷新');
-                    await eraDeletePokemonSpawns();
-                }
                 lastGameDay = currentDay;
                 
-                // ========== 为玩家周围区域生成宝可梦（只增不改）==========
                 const newSpawns = await PokemonSpawnSystem.generateForNearbyGrids(
                     location.x, 
                     location.y, 
                     eraVars
                 );
-                if (newSpawns) {
+                if (newSpawns && Object.keys(newSpawns).length > 0) {
                     await eraInsertPokemonSpawns(newSpawns);
                 }
                 
@@ -2009,6 +2059,41 @@ ${contextText}
                 console.log('[PKM] 检测到对话切换，重置面板');
                 iframeInitialized = false;
                 injectLocationContext(); // 切换对话时也刷新位置注入
+            });
+            
+            // ========== 监听宝可梦刷新事件（由 pkm-tavern-plugin.js 触发）==========
+            eventOn('pkm:refreshPokemonSpawns', async (detail) => {
+                console.log('[PKM] [POKEMON] 收到刷新事件:', detail);
+                try {
+                    // 确保数据已加载
+                    await LocationContextBackend.loadData();
+                    
+                    // 获取当前位置
+                    const eraVars = await getEraVars();
+                    const location = eraVars?.world_state?.location;
+                    if (!location || typeof location.x !== 'number') {
+                        console.warn('[PKM] [POKEMON] 无位置数据，跳过刷新');
+                        return;
+                    }
+                    
+                    // 生成新的宝可梦数据（强制刷新）
+                    const newSpawns = await PokemonSpawnSystem.generateForNearbyGrids(
+                        location.x, 
+                        location.y, 
+                        eraVars,
+                        true // forceRefresh = true
+                    );
+                    
+                    // 执行刷新（删除+插入）
+                    await eraRefreshPokemonSpawns(newSpawns);
+                    
+                    // 更新 lastGameDay
+                    lastGameDay = detail?.newDay || eraVars?.world_state?.time?.day;
+                    
+                    console.log('[PKM] [POKEMON] ✓ 刷新完成');
+                } catch (e) {
+                    console.error('[PKM] [POKEMON] 刷新失败:', e);
+                }
             });
         }
         
