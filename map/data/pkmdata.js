@@ -506,7 +506,6 @@ window.SPAWN_TABLES_DATA = {
         "rowlet",
         "grookey",
         "sprigatito",
-        "leafeon",
       ],
 
       boss: [
@@ -634,6 +633,7 @@ window.SPAWN_TABLES_DATA = {
         "aipom",
         "mankey",
         "slakoth",
+        "leafeon",
       ],
 
       uncommon: [
@@ -1534,7 +1534,6 @@ window.SPAWN_TABLES_DATA = {
 
       rare: [
         "jolteon",
-        "espeon",
         "togedemaru",
         "dedenne",
         { id: "raichu", min: 30 },
@@ -2734,6 +2733,7 @@ window.SPAWN_TABLES_DATA = {
         "impidimp",
         "espathra",
         "dreepy",
+        "espeon",
 
         "lunatone",
         "absol",
