@@ -1834,8 +1834,16 @@
                 }
                 
                 // 进化逻辑：对于 MID/HIGH/APEX 区域（level >= 20），自动进化到正确形态
-                if (level >= 20 && window.POKEDEX) {
-                    pokemonId = this.evolveToLevel(pokemonId, level, window.POKEDEX);
+                if (level >= 20) {
+                    if (window.POKEDEX) {
+                        const originalId = pokemonId;
+                        pokemonId = this.evolveToLevel(pokemonId, level, window.POKEDEX);
+                        if (originalId !== pokemonId) {
+                            console.log(`[PKM] 进化: ${originalId} Lv.${level} -> ${pokemonId}`);
+                        }
+                    } else {
+                        console.warn('[PKM] POKEDEX 未加载，跳过进化逻辑');
+                    }
                 }
                 
                 return { id: pokemonId, level };
