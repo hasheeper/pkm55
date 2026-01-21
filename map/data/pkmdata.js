@@ -39,6 +39,7 @@ window.SPAWN_TABLES_DATA = {
         { id: "duosion", min: 32 },
       ],
       rare: [
+        "fennekin",
         "abra",
         "ralts",
         "porygon",
@@ -96,6 +97,7 @@ window.SPAWN_TABLES_DATA = {
         "happiny",
       ],
       rare: [
+        "sprigatito",
         { id: "cherrim", min: 25 },
 
         "clefairy",
@@ -1472,6 +1474,7 @@ window.SPAWN_TABLES_DATA = {
         "galvantula",
 
         "morpeko",
+        "scorbunny",
       ],
 
       boss: [
@@ -1974,6 +1977,7 @@ window.SPAWN_TABLES_DATA = {
         "zorua",
         "abra",
         "porygon",
+        "litten",
       ],
 
       boss: [
@@ -2955,6 +2959,7 @@ window.SPAWN_TABLES_DATA = {
       ],
 
       rare: [
+        "fennekin",
         "ponyta-galar",
         "rapidash-galar",
 
@@ -3297,6 +3302,7 @@ window.SPAWN_TABLES_DATA = {
          { id: "onix", min: 20 },
         "durant",
         "orthworm",
+        "tepig",
       ],
 
       boss: [
@@ -3360,6 +3366,7 @@ window.SPAWN_TABLES_DATA = {
 
         "larvesta",
         "scovillain",
+        "torchic",
       ],
 
       boss: [
@@ -3420,6 +3427,7 @@ window.SPAWN_TABLES_DATA = {
         { id: "metang", min: 26 },
         "duraludon",
         "gigalith",
+        "chimchar",
       ],
 
       boss: [
@@ -3480,6 +3488,7 @@ window.SPAWN_TABLES_DATA = {
         "charmander",
         "cyndaquil",
         "bagon",
+        "fuecoco",
       ],
 
       boss: [
@@ -4226,6 +4235,7 @@ window.SPAWN_TABLES_DATA = {
       ],
 
       rare: [
+        "popplio",
         "feebas",
         "dratini",
         "lapras",
@@ -4407,6 +4417,7 @@ window.SPAWN_TABLES_DATA = {
       ],
 
       rare: [
+        "popplio",
         "cloyster",
         "lapras",
         "vaporeon",
@@ -4943,6 +4954,7 @@ window.SPAWN_TABLES_DATA = {
         "basculin-white-striped",
 
         "wugtrio",
+        "sobble",
       ],
 
       boss: [
