@@ -40,6 +40,8 @@ window.SPAWN_TABLES_DATA = {
       ],
       rare: [
         "fennekin",
+        "popplio",
+        "sprigatito",
         "abra",
         "ralts",
         "porygon",
@@ -97,7 +99,6 @@ window.SPAWN_TABLES_DATA = {
         "happiny",
       ],
       rare: [
-        "sprigatito",
         { id: "cherrim", min: 25 },
 
         "clefairy",
