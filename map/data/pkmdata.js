@@ -150,6 +150,7 @@ window.SPAWN_TABLES_DATA = {
         "clauncher",
         "pincurchin",
         "pyukumuku",
+        "squirtle",
       ],
 
       boss: [
@@ -4241,8 +4242,6 @@ window.SPAWN_TABLES_DATA = {
         "lapras",
         "starmie",
         "vaporeon",
-        "squirtle",
-        "mudkip",
       ],
 
       boss: [
@@ -4428,6 +4427,7 @@ window.SPAWN_TABLES_DATA = {
         "bruxish",
         "dhelmise",
         "palafin",
+        "squirtle",
       ],
 
       boss: [
