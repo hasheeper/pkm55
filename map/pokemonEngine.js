@@ -163,30 +163,31 @@ const PokemonSpawnEngine = {
         const roll = Math.random() * 100;
         
         if (threat === 1) {
-            // Safe: 90% common, 9% uncommon, 1% rare, 0% boss
-            if (roll < 90) return 'common';
-            if (roll < 99) return 'uncommon';
-            return 'rare';
+            // SAFE: 79.5% common, 17% uncommon, 3% rare, 0.5% boss
+            if (roll < 79.5) return 'common';
+            if (roll < 96.5) return 'uncommon';
+            if (roll < 99.5) return 'rare';
+            return 'boss';
         } else if (threat === 2) {
-            // Low: 75% common, 18% uncommon, 6% rare, 1% boss
+            // LOW: 75% common, 17% uncommon, 6% rare, 2% boss
             if (roll < 75) return 'common';
-            if (roll < 93) return 'uncommon';
-            if (roll < 99) return 'rare';
+            if (roll < 92) return 'uncommon';
+            if (roll < 98) return 'rare';
             return 'boss';
         } else if (threat === 3) {
-            // Mid: 55% common, 28% uncommon, 13% rare, 4% boss
+            // MID: 55% common, 28% uncommon, 13% rare, 4% boss
             if (roll < 55) return 'common';
             if (roll < 83) return 'uncommon';
             if (roll < 96) return 'rare';
             return 'boss';
         } else if (threat === 4) {
-            // High: 35% common, 32% uncommon, 23% rare, 10% boss
+            // HIGH: 35% common, 32% uncommon, 23% rare, 10% boss
             if (roll < 35) return 'common';
             if (roll < 67) return 'uncommon';
             if (roll < 90) return 'rare';
             return 'boss';
         } else {
-            // Apex (5): 20% common, 30% uncommon, 30% rare, 20% boss
+            // APEX: 20% common, 30% uncommon, 30% rare, 20% boss
             if (roll < 20) return 'common';
             if (roll < 50) return 'uncommon';
             if (roll < 80) return 'rare';
@@ -199,11 +200,11 @@ const PokemonSpawnEngine = {
      */
     getLevelRange(threat) {
         const ranges = {
-            1: { min: 3, max: 10 },   // Safe
-            2: { min: 8, max: 18 },   // Low
-            3: { min: 15, max: 28 },  // Mid
-            4: { min: 25, max: 42 },  // High
-            5: { min: 38, max: 60 }   // Apex
+            1: { min: 2, max: 8 },    // SAFE: 新手区
+            2: { min: 8, max: 20 },   // LOW: 初期冒险
+            3: { min: 20, max: 40 },  // MID: 完全进化前过渡期
+            4: { min: 40, max: 60 },  // HIGH: 高难度区域
+            5: { min: 60, max: 85 }   // APEX: 真正的禁区
         };
         return ranges[threat] || ranges[1];
     },
@@ -252,9 +253,42 @@ const PokemonSpawnEngine = {
     },
     
     /**
+     * 根据等级进化宝可梦到正确形态
+     * 仅对 MID(20-40)、HIGH(40-60)、APEX(60-85) 区域生效
+     */
+    evolveToLevel(pokemonId, level, pokedex) {
+        if (!pokedex || level < 20) return pokemonId; // 低等级不进化
+        
+        // 标准化 ID 用于查找
+        const normalizedId = pokemonId.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const data = pokedex[normalizedId];
+        
+        if (!data) return pokemonId; // 未找到数据，保持原样
+        
+        // 检查是否有进化形态
+        if (!data.evos || data.evos.length === 0) return pokemonId;
+        
+        // 获取第一个进化形态（通常只有一个等级进化）
+        const evoName = data.evos[0];
+        const evoId = evoName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const evoData = pokedex[evoId];
+        
+        if (!evoData || !evoData.evoLevel) return pokemonId;
+        
+        // 如果等级达到进化要求，递归检查下一阶段
+        if (level >= evoData.evoLevel) {
+            // 转换回标准格式（保留连字符）
+            const evolvedId = evoName.toLowerCase().replace(/ /g, '-');
+            return this.evolveToLevel(evolvedId, level, pokedex);
+        }
+        
+        return pokemonId;
+    },
+    
+    /**
      * 从池中随机选择一个宝可梦
      */
-    pickFromPool(pool, levelRange) {
+    pickFromPool(pool, levelRange, rarity = null) {
         if (!pool || pool.length === 0) return null;
         
         const idx = Math.floor(Math.random() * pool.length);
@@ -269,11 +303,20 @@ const PokemonSpawnEngine = {
             minLevel = entry.min || levelRange.min;
         }
         
-        // 计算实际等级：确保不低于minLevel
-        // 如果minLevel高于levelRange.max，则直接使用minLevel
         const effectiveMin = Math.max(minLevel, levelRange.min);
         const effectiveMax = Math.max(levelRange.max, effectiveMin);
-        const level = Math.floor(Math.random() * (effectiveMax - effectiveMin + 1)) + effectiveMin;
+        let level = Math.floor(Math.random() * (effectiveMax - effectiveMin + 1)) + effectiveMin;
+        
+        // Boss 等级加成：+3~5 级
+        if (rarity === 'boss') {
+            const bossBonus = 3 + Math.floor(Math.random() * 3); // 3-5 级加成
+            level = Math.min(level + bossBonus, 100); // 上限 100 级
+        }
+        
+        // 进化逻辑：对于 MID/HIGH/APEX 区域（level >= 20），自动进化到正确形态
+        if (level >= 20 && window.POKEDEX) {
+            pokemonId = this.evolveToLevel(pokemonId, level, window.POKEDEX);
+        }
         
         return { id: pokemonId, level };
     },
@@ -365,7 +408,7 @@ const PokemonSpawnEngine = {
         }
         
         // 从池中选择
-        const pokemon = this.pickFromPool(pool, levelRange);
+        const pokemon = this.pickFromPool(pool, levelRange, rarity);
         if (!pokemon) return null;
         
         return {
@@ -411,13 +454,13 @@ const PokemonSpawnEngine = {
         const count = 4 + Math.floor(Math.random() * 2); // 4-5个
         const results = [];
         
-        // ========== Legendary 独立判定（1%概率）==========
+        // ========== Legendary 独立判定（0.1% 概率）==========
         // Legendary 宝可梦单独判定，不占用普通宝可梦位置
         if (surfacePool && surfacePool.legendary && surfacePool.legendary.length > 0) {
-            const legendaryRoll = Math.random() * 100;
-            if (legendaryRoll < 1) { // 1% 概率
+            const legendaryRoll = Math.random() * 1000;
+            if (legendaryRoll < 1) { // 0.1% 概率 (1/1000)
                 const legendaryPool = surfacePool.legendary;
-                const legendaryPokemon = this.pickFromPool(legendaryPool, { min: 70, max: 80 });
+                const legendaryPokemon = this.pickFromPool(legendaryPool, { min: 70, max: 90 }, 'legendary');
                 if (legendaryPokemon) {
                     results.push({
                         ...legendaryPokemon,

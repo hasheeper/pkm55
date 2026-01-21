@@ -1239,7 +1239,7 @@ window.SPAWN_TABLES_DATA = {
         { id: "dugtrio-alola", min: 26 },
         { id: "stunfisk-galar", min: 1 },
         "orthworm",
-        "onix",
+         { id: "onix", min: 20 },
       ],
 
       boss: [
@@ -3091,7 +3091,7 @@ window.SPAWN_TABLES_DATA = {
 
         "orthworm",
         "glimmet",
-        "onix",
+         { id: "onix", min: 20 },
         "crustle",
 
         "scraggy",
@@ -3269,7 +3269,7 @@ window.SPAWN_TABLES_DATA = {
 
         "turtonator",
         "varoom",
-        "onix",
+         { id: "onix", min: 20 },
         "durant",
         "orthworm",
       ],
@@ -3631,8 +3631,7 @@ window.SPAWN_TABLES_DATA = {
         "gible",
         { id: "gabite", min: 24 },
         "pupitar",
-        "onix",
-
+         { id: "onix", min: 20 },
         "larvesta",
         "scovillain",
         "mandibuzz",
@@ -3678,7 +3677,7 @@ window.SPAWN_TABLES_DATA = {
         { id: "klang", min: 38 },
 
         "koffing",
-        "onix",
+         { id: "onix", min: 20 },
         "glimmet",
         "tinkatink",
       ],
@@ -3879,7 +3878,7 @@ window.SPAWN_TABLES_DATA = {
 
         "skarmory",
         "kilowattrel",
-        "onix",
+         { id: "onix", min: 20 },
         "anorith",
 
         "nosepass",
