@@ -288,6 +288,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "stoutland", min: 38 },
         { id: "rapidash", min: 40 },
       ],
+
+      legendary: [{ id: "landorus", min: 70 }],
     },
 
     High_Grass: {
@@ -514,6 +516,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "shiinotic", min: 35 },
         { id: "lurantis", min: 34 },
       ],
+
+      legendary: [{ id: "ogerpon", min: 70 }],
     },
 
     High_Grass: {
@@ -911,6 +915,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "kilowattrel", min: 40 },
         { id: "vivillon", min: 35 },
       ],
+
+      legendary: [{ id: "tornadus", min: 70 }],
     },
 
     High_Grass: {
@@ -1301,6 +1307,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "bellibolt", min: 38 },
         { id: "electrode", min: 35 },
       ],
+
+      legendary: [{ id: "cobalion", min: 70 }],
     },
 
     Standard_Grass: {
@@ -1474,6 +1482,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "manectric", min: 38 },
         { id: "bellibolt", min: 42 },
       ],
+
+      legendary: [{ id: "thundurus", min: 70 }],
     },
 
     Standard_Grass: {
@@ -2394,6 +2404,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "wyrdeer", min: 45 },
         { id: "mr-rime", min: 42 },
       ],
+
+      legendary: [{ id: "glastrier", min: 70 }],
     },
 
     Snowfield: {
@@ -2451,7 +2463,10 @@ window.SPAWN_TABLES_DATA = {
 
       ],
 
-      legendary: [{ id: "articuno", min: 70 }],
+      legendary: [
+        { id: "articuno", min: 70 },
+        { id: "regice", min: 70 },
+      ],
     },
   },
 
@@ -2515,7 +2530,10 @@ window.SPAWN_TABLES_DATA = {
         { id: "brambleghast", min: 38 },
       ],
 
-      legendary: [{ id: "regigigas", min: 70 }],
+      legendary: [
+        { id: "regigigas", min: 70 },
+        { id: "wo-chien", min: 70 },
+      ],
     },
 
     Light_Forest: {
@@ -2618,6 +2636,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "mawile", min: 35 },
         { id: "arcanine-hisui", min: 45 },
       ],
+
+      legendary: [{ id: "spectrier", min: 70 }],
     },
 
     Wet_Soil: {
@@ -2896,7 +2916,10 @@ window.SPAWN_TABLES_DATA = {
         { id: "muk-alola", min: 42 },
       ],
 
-      legendary: [{ id: "cresselia", min: 70 }],
+      legendary: [
+        { id: "cresselia", min: 70 },
+        { id: "virizion", min: 70 },
+      ],
     },
 
     Light_Forest: {
@@ -3061,6 +3084,8 @@ window.SPAWN_TABLES_DATA = {
         { id: "corviknight", min: 50 },
         { id: "aerodactyl", min: 45 },
       ],
+
+      legendary: [{ id: "terrakion", min: 70 }],
     },
 
     Waste: {
@@ -4282,7 +4307,10 @@ window.SPAWN_TABLES_DATA = {
           { id: "politoed", min: 45 },
         ],
 
-        legendary: [{ id: "suicune", min: 70 }],
+        legendary: [
+          { id: "suicune", min: 70 },
+          { id: "keldeo", min: 70 },
+        ],
       },
     },
 
@@ -4972,7 +5000,10 @@ window.SPAWN_TABLES_DATA = {
         { id: "gorebyss", min: 40 },
       ],
 
-      legendary: [{ id: "latios", min: 70 }],
+      legendary: [
+        { id: "latios", min: 70 },
+        { id: "latias", min: 70 },
+      ],
     },
   },
 
