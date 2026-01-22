@@ -2663,8 +2663,7 @@ ${contextText}
                     'padding': '0',
                     'height': '100vh'
                 });
-                // 隐藏关闭按钮（全屏时通过 MAP 内的按钮退出）
-                $('#pkm-close-btn').hide();
+                // 不隐藏关闭按钮，保持可用
                 console.log('[PKM] ✓ 已切换到全屏模式');
             } else {
                 // 恢复正常模式
@@ -2681,7 +2680,6 @@ ${contextText}
                     'padding': '1px',
                     'height': '97.5vh'
                 });
-                $('#pkm-close-btn').show();
                 console.log('[PKM] ✓ 已退出全屏模式');
             }
             

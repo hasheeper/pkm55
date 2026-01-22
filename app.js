@@ -2619,6 +2619,24 @@ window.openMapSystem = function() {
 window.closeMapSystem = function() {
     const modal = document.getElementById('map-modal');
     if (modal) {
+        // 如果在全屏模式，先通知父级退出全屏（恢复容器尺寸）
+        if (modal.classList.contains('fullscreen')) {
+            const message = {
+                type: 'PKM_MAP_FULLSCREEN',
+                fullscreen: false
+            };
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage(message, '*');
+                }
+                if (window.top && window.top !== window && window.top !== window.parent) {
+                    window.top.postMessage(message, '*');
+                }
+            } catch (e) {
+                console.error('[PKM] postMessage 发送失败:', e);
+            }
+        }
+        
         modal.classList.remove('active');
         modal.classList.remove('fullscreen');
         document.body.classList.remove('map-fullscreen-active');
