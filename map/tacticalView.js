@@ -388,11 +388,15 @@ const TacticalSystem = {
         }
         
         const ctx = this.ctx;
-        const { w, h } = this;
+        // 使用实时 canvas 尺寸，避免全屏切换后渲染错误
+        const w = ctx.canvas.width;
+        const h = ctx.canvas.height;
+        this.w = w;
+        this.h = h;
 
-        // 背景清空
+        // 背景清空（必须用实时尺寸）
         ctx.fillStyle = TACTICAL_STYLE.COLOR_BG;
-        ctx.fillRect(0,0, w, h);
+        ctx.fillRect(0, 0, w, h);
 
         // 物理缓动相机
         this.cam.x += (this.cam.inputX - this.cam.x) * TACTICAL_STYLE.DRAG_FRICTION;
