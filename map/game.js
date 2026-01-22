@@ -1327,6 +1327,11 @@ function resizeCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     
+    // 更新 TacticalSystem 尺寸
+    if (window.TacticalSystem && window.TacticalSystem.isActive) {
+        window.TacticalSystem.resize(canvas.width, canvas.height);
+    }
+    
     console.log('[MAP] Canvas 已调整:', w, 'x', h);
 } 
 function drawStatusText(t) {console.log(t);}

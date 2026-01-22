@@ -214,6 +214,13 @@ const TacticalSystem = {
     
     ctx: null, w:0, h:0,
 
+    // 更新尺寸（全屏切换时调用）
+    resize: function(w, h) {
+        this.w = w;
+        this.h = h;
+        console.log('[TacticalSystem] 尺寸已更新:', w, 'x', h);
+    },
+
     enter: function(ctx, w, h, pGx, pGy) {
         this.isActive = true;
         this.ctx = ctx; this.w = w; this.h = h;
