@@ -2633,7 +2633,15 @@ window.toggleMapFullscreen = function() {
         btn.title = isFullscreen ? '退出全屏' : '全屏';
     }
     
-    // 通知 iframe 调整大小
+    // 通知父级 iframe 容器调整大小（用于 tavern-inject.js）
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ 
+            type: 'PKM_MAP_FULLSCREEN', 
+            fullscreen: isFullscreen 
+        }, '*');
+    }
+    
+    // 通知 map iframe 调整大小
     const iframe = document.getElementById('map-iframe');
     if (iframe && iframe.contentWindow) {
         setTimeout(() => {

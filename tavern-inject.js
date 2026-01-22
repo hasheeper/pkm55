@@ -2633,6 +2633,39 @@ ${contextText}
                 console.log('[PKM] 收到 Settings 更新请求:', settingsData);
                 handleSettingsToggle(settingsData);
             }
+            
+            // 处理 MAP 全屏切换请求
+            if (event.data.type === 'PKM_MAP_FULLSCREEN') {
+                const isFullscreen = event.data.fullscreen;
+                console.log('[PKM] 收到 MAP 全屏请求:', isFullscreen);
+                
+                const wrapper = $('#pkm-content-wrapper');
+                const iframeEl = $('#pkm-iframe');
+                
+                if (isFullscreen) {
+                    // 全屏模式：移除尺寸限制
+                    wrapper.css({
+                        'max-width': '100vw',
+                        'max-height': '100vh',
+                        'width': '100vw',
+                        'height': '100vh'
+                    });
+                    iframeEl.css({
+                        'border-radius': '0'
+                    });
+                } else {
+                    // 恢复正常模式
+                    wrapper.css({
+                        'max-width': '485px',
+                        'max-height': '850px',
+                        'width': '100%',
+                        'height': '95vh'
+                    });
+                    iframeEl.css({
+                        'border-radius': '24px'
+                    });
+                }
+            }
         });
         
         // ========== Leader 切换处理 ==========
