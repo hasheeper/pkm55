@@ -145,6 +145,58 @@
                 'overflow': 'hidden'
             });
         
+        // 全屏按钮
+        const fullscreenIconSvg = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+        </svg>`;
+        
+        const fullscreenBtn = $('<div>')
+            .attr('id', 'pkm-fullscreen-btn')
+            .html(fullscreenIconSvg)
+            .css({
+                'position': 'absolute',
+                'top': '-5px',
+                'right': '40px',
+                'width': '40px',
+                'height': '40px',
+                'background': 'rgba(255, 255, 255, 0.85)',
+                'backdrop-filter': 'blur(4px)',
+                'border-radius': '50%',
+                'cursor': 'pointer',
+                'display': 'flex',
+                'align-items': 'center',
+                'justify-content': 'center',
+                'color': '#0984e3',
+                'z-index': 100,
+                'pointer-events': 'auto',
+                'transition': 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+            });
+        
+        fullscreenBtn.hover(
+            function() {
+                $(this).css({
+                    'transform': 'scale(1.1)',
+                    'background': '#0984e3',
+                    'color': '#fff'
+                });
+            },
+            function() {
+                $(this).css({
+                    'transform': 'scale(1)',
+                    'background': 'rgba(255, 255, 255, 0.85)',
+                    'color': '#0984e3'
+                });
+            }
+        );
+        
+        // 全屏按钮点击事件
+        let isFullscreen = false;
+        fullscreenBtn.on('click', function() {
+            isFullscreen = !isFullscreen;
+            handleMapFullscreen(isFullscreen);
+        });
+        
         // 关闭按钮（参考 build-iframe.js）
         const closeIconSvg = `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
@@ -191,8 +243,17 @@
             }
         );
         
+        // 关闭时如果在全屏模式，先退出全屏
+        closeBtn.on('click', function() {
+            if (isFullscreen) {
+                isFullscreen = false;
+                handleMapFullscreen(false);
+            }
+            overlay.css('display', 'none');
+        });
+        
         // 组装
-        contentWrapper.append(iframe).append(closeBtn);
+        contentWrapper.append(iframe).append(fullscreenBtn).append(closeBtn);
         overlay.append(contentWrapper);
         container.append(ball);
         $('body').append(container).append(overlay).append(hiddenIframe);
