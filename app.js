@@ -737,19 +737,31 @@ window.addEventListener('message', function(event) {
             mapIframe.contentWindow.postMessage({ type: 'MAP_RESIZE' }, '*');
         }
     } else if (event.data.type === 'PKM_FULLSCREEN_MODE') {
-        // 收到全屏模式切换消息，让 MAP 模态框也跟着全屏
+        // 收到全屏模式切换消息，让整个手机容器和 MAP 都全屏
         const isFullscreen = event.data.fullscreen;
         console.log('[PKM] 收到全屏模式切换:', isFullscreen);
         
+        const container = document.querySelector('.ver-dawn-frame');
         const modal = document.getElementById('map-modal');
-        if (modal) {
-            if (isFullscreen) {
-                modal.classList.add('fullscreen');
-                document.body.classList.add('map-fullscreen-active');
-            } else {
-                modal.classList.remove('fullscreen');
-                document.body.classList.remove('map-fullscreen-active');
+        
+        if (isFullscreen) {
+            // 让手机容器全屏
+            if (container) {
+                container.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;max-width:none;max-height:none;border-radius:0;z-index:99999;';
             }
+            if (modal) {
+                modal.classList.add('fullscreen');
+            }
+            document.body.classList.add('map-fullscreen-active');
+        } else {
+            // 恢复手机容器原始样式
+            if (container) {
+                container.style.cssText = '';
+            }
+            if (modal) {
+                modal.classList.remove('fullscreen');
+            }
+            document.body.classList.remove('map-fullscreen-active');
         }
         
         // 转发给 map iframe 调整 canvas 大小
