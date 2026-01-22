@@ -2637,7 +2637,7 @@ ${contextText}
                     await LocationContextBackend.loadData();
                     
                     // 获取当前位置
-                    let eraVars = await getEraVars();
+                    const eraVars = await getEraVars();
                     const location = eraVars?.world_state?.location;
                     if (!location || typeof location.x !== 'number') {
                         console.warn('[PKM] [POKEMON] 无位置数据，跳过刷新');
@@ -2648,13 +2648,16 @@ ${contextText}
                     const newDay = detail?.newDay || eraVars?.world_state?.time?.day;
                     lastGameDay = newDay;
                     
-                    // ★ 先更新异变状态（基于新的天数），确保刷新宝可梦时能读取到正确的 phenomenon
-                    await updatePhenomenonByDay(newDay);
+                    // ★ 计算并更新异变状态，同时返回计算结果（不依赖 ERA 重新获取）
+                    const phenomenon = await updatePhenomenonByDay(newDay);
                     
-                    // 重新获取 ERA 变量（包含更新后的 phenomenon 状态）
-                    eraVars = await getEraVars();
+                    // 直接使用计算出的 phenomenon 状态，注入到 eraVars 中
+                    if (!eraVars.world_state) eraVars.world_state = {};
+                    eraVars.world_state.phenomenon = phenomenon;
                     
-                    // 生成新的宝可梦数据（强制刷新，此时 phenomenon 已更新）
+                    console.log('[PKM] [SPAWN] 使用计算的异变状态:', phenomenon);
+                    
+                    // 生成新的宝可梦数据（强制刷新，使用本地计算的 phenomenon）
                     const newSpawns = await PokemonSpawnSystem.generateForNearbyGrids(
                         location.x, 
                         location.y, 
@@ -2672,36 +2675,34 @@ ${contextText}
             });
             
             // ========== 异变系统刷新逻辑 ==========
-            // 根据天数更新 phenomenon 状态
+            // 根据天数更新 phenomenon 状态，返回计算出的状态对象
             async function updatePhenomenonByDay(day) {
-                if (!day || day < 1) return;
+                const defaultState = { active_type: "clear", active_region: "none" };
+                
+                if (!day || day < 1) return defaultState;
                 
                 console.log('[PKM] [PHENOMENON] 检查异变状态，当前天数:', day);
                 
                 // Week 1 (Day 1-7): 锁定为 clear
                 if (day <= 7) {
                     console.log('[PKM] [PHENOMENON] 第一周，保持 clear 状态');
-                    // 第一周也需要确保注入初始状态
                     await setPhenomenonState("clear", "none", true);
-                    return;
+                    return defaultState;
                 }
                 
                 // Week 2+ (Day > 7): 根据 dayOfWeek 轮换
-                // Day 1-7 = Week 1 (Mon-Sun)
-                // Day 8 = Week 2 Monday, Day 9 = Week 2 Tuesday, ...
-                // dayOfWeek: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 0=Sun
-                const dayOfWeek = ((day - 1) % 7) + 1; // 1-7, 然后 7 变成 0 (Sunday)
-                const normalizedDayOfWeek = dayOfWeek === 7 ? 0 : dayOfWeek; // 0=Sun, 1=Mon, ..., 6=Sat
+                const dayOfWeek = ((day - 1) % 7) + 1;
+                const normalizedDayOfWeek = dayOfWeek === 7 ? 0 : dayOfWeek;
                 
                 // 星期轮换规则
                 const schedule = {
-                    0: { type: "clear", region: "none" },           // Sunday: 休息
-                    1: { type: "ancient", region: "west" },         // Monday: 古代
-                    2: { type: "future", region: "east" },          // Tuesday: 未来
-                    3: { type: "ultra", region: "random" },         // Wednesday: 究极
-                    4: { type: "ancient", region: "west" },         // Thursday: 古代
-                    5: { type: "future", region: "east" },          // Friday: 未来
-                    6: { type: "ultra", region: "random" }          // Saturday: 究极
+                    0: { type: "clear", region: "none" },
+                    1: { type: "ancient", region: "west" },
+                    2: { type: "future", region: "east" },
+                    3: { type: "ultra", region: "random" },
+                    4: { type: "ancient", region: "west" },
+                    5: { type: "future", region: "east" },
+                    6: { type: "ultra", region: "random" }
                 };
                 
                 const todaySchedule = schedule[normalizedDayOfWeek] || { type: "clear", region: "none" };
@@ -2716,7 +2717,11 @@ ${contextText}
                 console.log('[PKM] [PHENOMENON] Day', day, '-> dayOfWeek', normalizedDayOfWeek, 
                     '-> type:', todaySchedule.type, 'region:', activeRegion);
                 
-                await setPhenomenonState(todaySchedule.type, activeRegion);
+                // 异步注入 ERA（不等待完成）
+                setPhenomenonState(todaySchedule.type, activeRegion);
+                
+                // 立即返回计算结果供 spawn 使用
+                return { active_type: todaySchedule.type, active_region: activeRegion };
             }
             
             // 设置异变状态（通过 VariableEdit 注入）

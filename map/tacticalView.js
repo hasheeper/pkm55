@@ -1992,7 +1992,11 @@ const TacticalSystem = {
             uncommon: "#00b894",
             rare: "#0984e3",
             boss: "#e17055",
-            legendary: "#fdcb6e"  // 金色 - 传说宝可梦
+            legendary: "#fdcb6e",        // 金色 - 传说宝可梦
+            paradox: "#B71C1C",          // 深红 - 悖谬宝可梦（古代/未来）
+            paradox_boss: "#B71C1C",     // 深红 - 悖谬Boss
+            ultra: "#6A1B9A",            // 深紫 - 究极异兽
+            ultra_beast: "#6A1B9A"       // 深紫 - 究极异兽（别名）
         };
 
         const cols = 2;
@@ -2379,10 +2383,15 @@ const TacticalSystem = {
         popup.appendChild(scrollStyle);
 
         const rarityConf = {
-            common:   { c: '#b2bec3' },
-            uncommon: { c: '#00b894' },
-            rare:     { c: '#0984e3' },
-            boss:     { c: '#e74c3c' }
+            common:      { c: '#b2bec3' },
+            uncommon:    { c: '#00b894' },
+            rare:        { c: '#0984e3' },
+            boss:        { c: '#e74c3c' },
+            legendary:   { c: '#fdcb6e' },    // 金色 - 传说宝可梦
+            paradox:     { c: '#B71C1C' },    // 深红 - 悖谬宝可梦
+            paradox_boss:{ c: '#B71C1C' },    // 深红 - 悖谬Boss
+            ultra:       { c: '#6A1B9A' },    // 深紫 - 究极异兽
+            ultra_beast: { c: '#6A1B9A' }     // 深紫 - 究极异兽（别名）
         };
 
         const regionalForms = ['alola', 'galar', 'hisui', 'paldea'];
