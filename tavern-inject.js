@@ -1726,22 +1726,22 @@
                     if (roll < 98) return 'rare';
                     return 'boss';
                 } else if (threat === 3) {
-                    // MID: 55% common, 28% uncommon, 13% rare, 4% boss
-                    if (roll < 55) return 'common';
-                    if (roll < 83) return 'uncommon';
+                    // MID: 70% common, 20% uncommon, 6% rare, 4% boss
+                    if (roll < 70) return 'common';
+                    if (roll < 90) return 'uncommon';
                     if (roll < 96) return 'rare';
                     return 'boss';
                 } else if (threat === 4) {
-                    // HIGH: 35% common, 32% uncommon, 23% rare, 10% boss
-                    if (roll < 35) return 'common';
-                    if (roll < 67) return 'uncommon';
-                    if (roll < 90) return 'rare';
+                    // HIGH: 60% common, 25% uncommon, 9% rare, 6% boss
+                    if (roll < 60) return 'common';
+                    if (roll < 85) return 'uncommon';
+                    if (roll < 94) return 'rare';
                     return 'boss';
                 } else {
-                    // APEX: 20% common, 30% uncommon, 30% rare, 20% boss
-                    if (roll < 20) return 'common';
-                    if (roll < 50) return 'uncommon';
-                    if (roll < 80) return 'rare';
+                    // APEX: 50% common, 30% uncommon, 20% rare, 10% boss
+                    if (roll < 50) return 'common';
+                    if (roll < 80) return 'uncommon';
+                    if (roll < 100) return 'rare';
                     return 'boss';
                 }
             },
@@ -1912,29 +1912,31 @@
                 // Ancient/Future 异变：检查悖谬锚点
                 if ((activeType === "ancient" || activeType === "future") && paradoxAnchors.length > 0) {
                     for (const anchor of paradoxAnchors) {
-                        // Boss 类型（100% 刷新）
+                        // Boss 类型（25% 刷新）
                         if (anchor.startsWith("Elite_") || anchor.startsWith("Boss_")) {
                             const config = this.STATIC_BOSS_MAP[anchor];
                             if (config && config.type === activeType) {
-                                const level = config.pokemon.min + Math.floor(Math.random() * 5);
-                                return {
-                                    id: config.pokemon.id,
-                                    level,
-                                    rarity: "paradox_boss",
-                                    biome: "Paradox_Zone",
-                                    surface: "Anchor",
-                                    threat: 10,
-                                    phenomenon: activeType
-                                };
+                                if (Math.random() < 0.25) {
+                                    const level = config.pokemon.min + Math.floor(Math.random() * 5);
+                                    return {
+                                        id: config.pokemon.id,
+                                        level,
+                                        rarity: "paradox_boss",
+                                        biome: "Paradox_Zone",
+                                        surface: "Anchor",
+                                        threat: 10,
+                                        phenomenon: activeType
+                                    };
+                                }
                             }
                         }
                         
-                        // Pool 类型（10% 概率）
+                        // Pool 类型（25% 概率）
                         if (anchor.startsWith("Pool_")) {
                             const config = this.PARADOX_SPAWN_POOLS[anchor];
                             if (config && config.type === activeType) {
-                                // 10% 概率刷新
-                                if (Math.random() < 0.10) {
+                                // 25% 概率刷新
+                                if (Math.random() < 0.25) {
                                     const pokemon = config.pokemon[Math.floor(Math.random() * config.pokemon.length)];
                                     const level = pokemon.min + Math.floor(Math.random() * 10);
                                     return {

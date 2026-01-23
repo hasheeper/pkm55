@@ -417,9 +417,11 @@ body {
 .p-lv-val { color: var(--c-text); font-size: 0.9rem; }
 
 .p-name {
+    /* 使用日系圆体字体显示宝可梦名称 */
+    font-family: 'M PLUS Rounded 1c', var(--font-ui), sans-serif;
     font-size: 1.6rem; font-weight: 900; color: #2d3436;
     letter-spacing: -1px; margin-top: 2px;
-    text-transform: uppercase;
+    /* 移除 text-transform: uppercase 以支持中文显示 */
     background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
     background-clip: text;
     -webkit-background-clip: text;
@@ -639,8 +641,9 @@ body {
 .k-move-shell span {
     transform: skewX(15deg);
     color: #fff;
-    font-family: var(--font-txt);
-    font-weight: 900;
+    /* 使用日系圆体字体显示招式名称 */
+    font-family: 'M PLUS Rounded 1c', var(--font-txt), sans-serif;
+    font-weight: 800;
     font-size: 0.85rem;
     white-space: nowrap;
     overflow: hidden;

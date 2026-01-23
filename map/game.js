@@ -1442,9 +1442,13 @@ function updateDOMTooltip(x, y, dat) {
     canvas.style.cursor = 'pointer';
     tooltip.style.display = 'block';
     
-    // 替换下划线
-    let txt = dat.val.replace(/_/g, ' '); 
-    tooltip.innerHTML = `<b style="color:${dat.clr}; font-size:14px;">${txt}</b><br><span style="font-size:10px; color:#aaa">${dat.type==="obj"?"ENTITY":"DESIGNATED ZONE"}</span>`;
+    // 使用汉化翻译（如果 translateMapName 函数存在）
+    let txt = dat.val.replace(/_/g, ' ');
+    if (typeof translateMapName === 'function') {
+        txt = translateMapName(dat.val);
+    }
+    const typeLabel = dat.type === "obj" ? "实体" : "指定区域";
+    tooltip.innerHTML = `<b style="color:${dat.clr}; font-size:14px; font-family:'M PLUS Rounded 1c', sans-serif;">${txt}</b><br><span style="font-size:10px; color:#aaa">${typeLabel}</span>`;
     
     tooltip.style.left = (x+20)+'px';
     tooltip.style.top = (y+20)+'px';
@@ -1762,11 +1766,13 @@ const RouteSystem = {
                 totalRiskPoints += getIntVal(mx, my, 'Threat') || 0;
             }
 
-            let zoneName = formatZoneLabel(
+            let zoneNameRaw = formatZoneLabel(
                 getEntZoneName('Region_Zone', pt.gx, pt.gy)
                 || getEntZoneName('Biome_Zone', pt.gx, pt.gy)
-            ) || `GRID ${formatCoords(pt.gx, pt.gy)}`;
-            if(isStart) zoneName = 'CURRENT POSITION';
+            );
+            // 使用汉化翻译
+            let zoneName = zoneNameRaw ? (typeof translateMapName === 'function' ? translateMapName(zoneNameRaw) : zoneNameRaw) : `格点 ${formatCoords(pt.gx, pt.gy)}`;
+            if(isStart) zoneName = '当前位置';
 
             const display = toDisplayCoords(pt.gx, pt.gy);
             const div = document.createElement('div');
@@ -1980,13 +1986,15 @@ const RouteSystem = {
     
     // 获取位置名称
     getLocationName(index) {
-        if(index < 0 || index >= this.markers.length) return 'Unknown';
+        if(index < 0 || index >= this.markers.length) return '未知';
         const pt = this.markers[index];
         const display = toDisplayCoords(pt.gx, pt.gy);
-        const zone = formatZoneLabel(
+        const zoneRaw = formatZoneLabel(
             getEntZoneName('Region_Zone', pt.gx, pt.gy)
             || getEntZoneName('Biome_Zone', pt.gx, pt.gy)
-        ) || `[${display.x}, ${display.y}]`;
+        );
+        // 使用汉化翻译
+        const zone = zoneRaw ? (typeof translateMapName === 'function' ? translateMapName(zoneRaw) : zoneRaw) : `[${display.x}, ${display.y}]`;
         return zone;
     },
     
@@ -2001,7 +2009,9 @@ const RouteSystem = {
         const regionName = getIntGridTextName('Region', regionVal) || '';
         const biomeName = getIntGridTextName('Biome', biomeVal) || '';
         const surfaceName = getIntGridTextName('Surface', surfaceVal) || '';
-        const zoneName = formatZoneLabel(zoneVal) || 'Local Grid';
+        const zoneNameRaw = formatZoneLabel(zoneVal) || 'Local Grid';
+        // 使用汉化翻译
+        const zoneName = typeof translateMapName === 'function' ? translateMapName(zoneNameRaw) : zoneNameRaw;
         
         return {
             displayX: display.x,

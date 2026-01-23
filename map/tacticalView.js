@@ -54,6 +54,305 @@ const AVATAR_FIXES = {
     "mallow": "mallow"
 };
 
+/**
+ * 翻译宝可梦名称为中文
+ * @param {string} pokemonId - 宝可梦英文ID (如 "pikachu", "bulbasaur-galar")
+ * @returns {string} - 中文名称，如果没有翻译则返回格式化的英文名
+ */
+/**
+ * 地区/生态区/点位名称汉化映射
+ */
+const MAP_TRANSLATIONS = {
+    // 五大区域
+    "Region_Zenith": "中枢区",
+    "Region_Neon": "霓虹区", 
+    "Region_Bloom": "盛放区",
+    "Region_Shadow": "暗影区",
+    "Region_Apex": "极诣区",
+    "ZENITH": "中枢区",
+    "NEON": "霓虹区",
+    "BLOOM": "盛放区", 
+    "SHADOW": "暗影区",
+    "APEX": "极诣区",
+    
+    // 人文区域 (region_zones)
+    "Aether_Admin_Zone": "以太行政区",
+    "Royal_Academy": "皇家学院",
+    "Living_Quarter": "居住区",
+    "Lusamine_Gardens": "露莎米奈花园",
+    "Eco_Subject_Delta": "生态实验区Δ",
+    "Academic_Plaza": "学术广场",
+    "Iono_Stream_Tower": "奇树直播塔",
+    "Toxic_Industrial_Park": "毒系工业园",
+    "Cyber_Shopping_District": "电子商业区",
+    "Port_Logistics_Area": "港口物流区",
+    "Glitch_Arcade_Lane": "故障街机巷",
+    "Skyline_Residences": "天际住宅区",
+    "Synth_Promenade": "合成步道",
+    "Pearl_Resort": "珍珠度假镇",
+    "Sunflora_Farmsteads": "向日花农场",
+    "Marina_Port_Town": "码头港镇",
+    "Grim_Borough": "铁灰市",
+    "Venom_Refinery": "毒液精炼厂",
+    "Frost_Smoke_City": "霜烟市",
+    "Requiem_Grounds": "安魂墓地",
+    "Canal_Ruins_Post": "运河遗迹哨站",
+    "Kamunagi_Hollow": "神阖之空洞",
+    "Crimson_Forge_City": "红莲锻造市",
+    "Titan_Mining_site": "泰坦矿坑",
+    "Dune_Watcher_Post": "沙丘守望哨",
+    "Ruins_of_Giants": "巨人遗迹",
+    
+    // 生态区 (biome_flavor)
+    "Arcadia_Lawns": "阿卡迪亚草坪",
+    "Sapphire_Strand": "蓝宝石海岸",
+    "Hermit_Sands": "隐士沙洲",
+    "Aroma_Meadow": "芳香草甸",
+    "Jade_Canopy": "翡翠天冠",
+    "Deep_Root_Hollow": "深根空洞",
+    "Silt_Delta": "淤积三角洲",
+    "Breeze_Woodlands": "微风林地",
+    "Golden_Horizon": "黄金地平线",
+    "Radiant_Plains": "光辉平原",
+    "Savanna_Outlands": "野蛮荒地",
+    "Scorched_Dunes": "焦痕沙丘",
+    "Obsidian_Beach": "黑曜石滩",
+    "Inferno_Crater": "炼狱火山口",
+    "Crimson_Badlands": "深红恶地",
+    "Frostbite_Slope": "霜咬坡地",
+    "Cinder_Moor": "余烬荒原",
+    "Twilight_Copse": "暮光灌丛",
+    "Crimson_Peat": "深红泥炭地",
+    "Spirit_Plateau": "镇魂高地",
+    "Ginkgo_Grove": "银杏之森",
+    "Silent_Tundra": "沉寂冻土",
+    "Zero_Halo_Moat": "零光护城河",
+    "Mirror_Lotis_Lake": "镜面莲花湖",
+    "Emerald_Vein_River": "翡翠脉络河",
+    "Crystal_Lagoon": "晶体泻湖",
+    "Twin_Destiny_Basin": "双命定盆地",
+    "Chrome_Canal": "铬色运河",
+    "Ferro_Straits": "钢铁海峡",
+    "Mercury_Stream": "水银溪",
+    "Frigid_Floe": "寒冷浮冰",
+    "Mist_Veil_Sound": "雾幕海湾",
+    "Prism_Bay": "棱镜海湾",
+    "Cerulean_Reef": "蔚蓝珊瑚海",
+    "Basalt_Shoals": "玄武岩浅滩",
+    "Equatorial_Dark_Zone": "赤道暗区",
+    "Titan_Trough": "泰坦海槽",
+    "Chrome_Abyss": "铬色深渊",
+    "Boreal_Trench": "北境海沟",
+    
+    // 地表类型 (Surface/Terrain)
+    "Deep_Sea": "深海",
+    "Shallow_Sea": "浅海",
+    "Fresh_Water": "淡水",
+    "Glacial_Water": "冰川水域",
+    "Sewage": "污水区",
+    "Swamp": "沼泽",
+    "Standard_Grass": "草地",
+    "High_Grass": "高草丛",
+    "Light_Forest": "疏林",
+    "Deep_Jungle": "密林",
+    "Flower_Field": "花田",
+    "Withered_Grass": "枯草地",
+    "Coastal_Sand": "海岸沙滩",
+    "Desert_Sand": "沙漠",
+    "Wet_Soil": "湿土",
+    "Scorched_Earth": "焦土",
+    "Waste": "废土",
+    "Pavement": "铺装路面",
+    "Slum_Pavement": "旧街道",
+    "Synthetic_Turf": "人工草坪",
+    "Industrial": "工业区",
+    "High_Voltage": "高压区",
+    "Ancient_Timber": "木栈道",
+    "Rocky_Mountain": "岩山",
+    "Magma": "熔岩",
+    "Snowfield": "雪原",
+    "Wall_Block": "障碍",
+    "VOID": "虚空",
+    "PATH": "通道",
+    "NONE": "无",
+    
+    // 服务设施 (service)
+    "Wares_General": "友好商店",
+    "Shop_Special_Z": "皇冠精品店",
+    "Shop_Special_N": "得文科技店",
+    "Shop_Special_B": "芳香草药屋",
+    "Shop_Special_S": "地下黑市",
+    "Shop_Special_A": "极诣补给站",
+    "Shop_Ginkgo_Cart": "银杏商会",
+    "CP_Zenith_Main": "中枢宝可梦中心",
+    "CP_Neon_Central": "霓虹宝可梦中心",
+    "CP_Bloom_Port": "海滨宝可梦中心",
+    "CP_Shadow_Slum": "铁灰宝可梦中心",
+    "CP_Apex_Base": "前线宝可梦中心",
+    "Bed_Rest": "住宿点",
+    "Player_s_Room": "玩家房间",
+    "PC_Terminal": "电脑终端",
+    "Police_Box_Z": "Z区安保站",
+    "Police_Box_N": "N区巡逻亭",
+    "Police_Box_B": "海岸警卫站",
+    "Police_Box_S": "S区岗哨",
+    "Police_Box_A": "巡护员基地",
+    
+    // 地点锚点 (place_anchor)
+    "Cafe": "咖啡厅",
+    "Bar": "酒吧",
+    "Diner": "餐厅",
+    "Shop_Browsk": "商店",
+    "Arcade": "游戏厅",
+    "Relax": "休息区",
+    "Viewpoint": "观景点",
+    "Plaza": "广场",
+    "Nature_Spot": "自然景点",
+    "Study": "学习区",
+    
+    // 传送系统 (system_warps)
+    "Sewer": "下水道",
+    "Cave": "洞穴",
+    "Gate": "闸口",
+    
+    // 交通设施 (transit_infrastructure)
+    "Central_Hub": "中央枢纽站",
+    "Electro_Avenue": "电子大道站",
+    "Seaside_Terminal": "海滨终点站",
+    "District_S": "S区地铁站",
+    "Frontier_Outpost": "前线货运站",
+    "Neon_Cargo_Terminal": "霓虹货运码头",
+    "Sapphire_Marina": "蓝宝石码头",
+    "Restricted_Dock": "限制港口",
+    "Northern_Cemetery_Pad": "北部墓地停机坪",
+    "Summit_Dojo_Point": "山巅道场降落点",
+    "Zenith_HQ_Helipad": "中枢总部直升机坪",
+    "Lift_Station_Lower": "缆车下站",
+    "Lift_Station_Upper": "缆车上站",
+    
+    // NPC场所 (npc_actor_context)
+    "Gloria_Camp_Curry": "咖喱营地",
+    "Rosa_PokeStar_Studios": "宝可梦影城",
+    "Dawn_VIP_Beach_Villa_01": "海滨别墅",
+    "Akari_Jubilife_Survey_Barracks": "调查队宿舍",
+    "Serena_Boutique_Serena_Style": "时装工作室",
+    "Selene_Jungle_Treehouse": "丛林树屋",
+    "Juliana_Int_l_Dorm_Rm_303": "国际宿舍303",
+    "May_Secret_Base": "秘密基地",
+    "Iris_Zenith_Air_Attic": "空中阁楼",
+    "Nemona_Suite": "妮莫套房",
+    "Cynthia_Study_Room": "竹兰研究室",
+    "Lusamine_Exec_Private_Penthouse": "露莎米奈私人公馆",
+    "Lillie_Staff_Dormitory_Room_201": "职工宿舍201",
+    "Mallow_Lana_Alola_Breeze_Diner_Room": "玛奥水莲阿罗拉餐厅",
+    "Irida_Pearl_Clan_Sanctuary": "珍珠队圣所",
+    "Misty_Lifeguard_Tower": "救生塔",
+    "Lacey_Committee_Office": "委员会办公室",
+    "Sonia_Rhodia_Central_Lab": "中央实验室",
+    "Roxie_Venom_Core_Live_House": "猛毒演出场",
+    "Iono_Levincia_Guild_Tower": "奇树直播塔",
+    "Marnie_Spikemuth_Relief_Center": "尖钉镇据点",
+    "Hex_Curio_Shop_Seance": "古董杂货铺",
+    "Bea_Iron_Will_Dojo": "钢铁意志道场",
+    "Erika_Celadon_Spa": "芳疗庭院",
+    "Nessa_The_Infinity_Poolside_Lounge": "无边泳池休息厅",
+    "Acerola_Abandoned_Library": "废弃图书馆",
+    "Skyla_Hangar_04": "4号机库"
+};
+
+/**
+ * 翻译地图名称为中文
+ * @param {string} name - 英文名称
+ * @returns {string} - 中文名称，如果没有翻译则返回格式化的英文名
+ */
+function translateMapName(name) {
+    if (!name) return '未知';
+    
+    // 去除空格和下划线的标准化
+    const normalizedName = name.trim();
+    
+    // 直接匹配
+    if (MAP_TRANSLATIONS[normalizedName]) {
+        return MAP_TRANSLATIONS[normalizedName];
+    }
+    
+    // 尝试下划线格式
+    const underscoreName = normalizedName.replace(/\s+/g, '_');
+    if (MAP_TRANSLATIONS[underscoreName]) {
+        return MAP_TRANSLATIONS[underscoreName];
+    }
+    
+    // 尝试大写格式
+    const upperName = normalizedName.toUpperCase();
+    if (MAP_TRANSLATIONS[upperName]) {
+        return MAP_TRANSLATIONS[upperName];
+    }
+    
+    // 尝试部分匹配
+    for (const key in MAP_TRANSLATIONS) {
+        if (key.toLowerCase().includes(normalizedName.toLowerCase()) ||
+            normalizedName.toLowerCase().includes(key.toLowerCase())) {
+            return MAP_TRANSLATIONS[key];
+        }
+    }
+    
+    // 没有翻译，返回格式化的英文名
+    return normalizedName.replace(/_/g, ' ');
+}
+
+// 暴露为全局函数，供 game.js 使用
+window.translateMapName = translateMapName;
+
+function translatePokemonName(pokemonId) {
+    if (!pokemonId) return '???';
+    
+    // 标准化ID格式
+    let normalizedId = pokemonId.trim();
+    
+    // 尝试多种格式匹配翻译
+    if (typeof translations !== 'undefined') {
+        // 1. 直接匹配 (首字母大写)
+        const capitalizedId = normalizedId.charAt(0).toUpperCase() + normalizedId.slice(1).toLowerCase();
+        if (translations[capitalizedId]) {
+            return translations[capitalizedId];
+        }
+        
+        // 2. 处理带连字符的形态 (如 pikachu-gmax -> Pikachu-Gmax)
+        if (normalizedId.includes('-')) {
+            const parts = normalizedId.split('-');
+            const formattedId = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('-');
+            if (translations[formattedId]) {
+                return translations[formattedId];
+            }
+        }
+        
+        // 3. 处理下划线格式 (如 pikachu_gmax)
+        if (normalizedId.includes('_')) {
+            const parts = normalizedId.split('_');
+            const formattedId = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('-');
+            if (translations[formattedId]) {
+                return translations[formattedId];
+            }
+        }
+        
+        // 4. 尝试只匹配基础名称 (去除形态后缀)
+        const baseName = normalizedId.split(/[-_]/)[0];
+        const capitalizedBase = baseName.charAt(0).toUpperCase() + baseName.slice(1).toLowerCase();
+        if (translations[capitalizedBase]) {
+            // 如果有形态后缀，附加上去
+            const suffix = normalizedId.includes('-') ? normalizedId.split('-').slice(1).join('-') : 
+                          normalizedId.includes('_') ? normalizedId.split('_').slice(1).join('-') : '';
+            if (suffix) {
+                return translations[capitalizedBase] + '-' + suffix.toUpperCase();
+            }
+            return translations[capitalizedBase];
+        }
+    }
+    
+    // 没有翻译，返回格式化的英文名
+    return normalizedId.replace(/[-_]/g, ' ').toUpperCase();
+}
+
 const THREAT_MAP = {
     0: { label: "NULL",  color: "#bdc3c7", alert: false },
     6: { label: "PEACE", color: "#2ecc71", alert: false },
@@ -331,7 +630,9 @@ const TacticalSystem = {
         const regionDisplay = regionEntity || regionIntName || (regionIntVal ? `SEC-${regionIntVal}` : "UNDEFINED");
         const biomeDisplay = formatZoneName(tags.biome) || "---";
 
-        const surfaceName = (window.TERRAIN_CONFIG && window.TERRAIN_CONFIG[surfaceVal]?.type) || "VOID";
+        const surfaceNameRaw = (window.TERRAIN_CONFIG && window.TERRAIN_CONFIG[surfaceVal]?.type) || "VOID";
+        // 使用汉化翻译地表名称
+        const surfaceName = translateMapName(surfaceNameRaw);
         const infraLabel = infraVal > 0 ? "YES" : "NO";
         const travLabel = TRAV_MAP[travVal] || "CLOSED";
         const obsLabel = obsVal === 1 ? "BLOCK" : "OPEN";
@@ -352,7 +653,7 @@ const TacticalSystem = {
             surfaceName,
             // 原始值用于宝可梦生成
             biomeZoneRaw: tags.biome || '',
-            surfaceTypeRaw: surfaceName,
+            surfaceTypeRaw: surfaceNameRaw,
             infraText: infraLabel,
             travText: travLabel,
             obsText: obsLabel,
@@ -1075,9 +1376,12 @@ const TacticalSystem = {
         let color = ent.__smartColor || "#333";
         if(layerName === "Core_Logic") color = "#e67e22";
 
-        let dName = (ent.fieldInstances[0]?.__value || ent.__identifier).replace(/_/g, ' ');
+        // 获取原始名称用于图标判断
+        const rawName = (ent.fieldInstances[0]?.__value || ent.__identifier);
+        const upName = rawName.toUpperCase().replace(/_/g, ' ');
+        // 使用汉化翻译显示名称（NPC保持英文）
+        let dName = layerName === "NPC_Actor" ? rawName.replace(/_/g, ' ') : translateMapName(rawName);
         let drawResource = null;
-        const upName = dName.toUpperCase();
 
         if (upName.includes("CAFE")) drawResource = ENTITY_ICONS.CAFE;
         else if (upName.includes("BAR")) drawResource = ENTITY_ICONS.BAR;
@@ -1090,7 +1394,8 @@ const TacticalSystem = {
         else if (upName.includes("POLICE")) { drawResource = ENTITY_ICONS.POLICE; color = "#34495e"; }
         else if (layerName === "Core_Logic") drawResource = ENTITY_ICONS.WARP;
 
-        ctx.font = "bold 11px sans-serif";
+        // 使用日系圆体字体显示地标名称
+        ctx.font = "bold 11px 'M PLUS Rounded 1c', sans-serif";
         const txtW = ctx.measureText(dName).width;
         const badgeW = 34 + txtW + 12;
         const badgeH = 28;
@@ -1152,7 +1457,8 @@ const TacticalSystem = {
         ctx.fillStyle = "#2c3e50";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.font = "bold 11px sans-serif";
+        // 使用日系圆体字体显示地标名称
+        ctx.font = "bold 11px 'M PLUS Rounded 1c', sans-serif";
         ctx.fillText(dName, bx + 30, by + badgeH / 2 + 1);
 
         ctx.restore();
@@ -1180,10 +1486,12 @@ const TacticalSystem = {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         const threatInfo = THREAT_MAP[d.threat] || THREAT_MAP[0];
-        let regionNameDisplay = getIntGridTextName("Regions", d.regionInt) || "WILDERNESS";
-        regionNameDisplay = formatZoneName(regionNameDisplay).toUpperCase();
+        let regionNameRaw = getIntGridTextName("Regions", d.regionInt) || "WILDERNESS";
+        // 使用汉化翻译
+        let regionNameDisplay = translateMapName(regionNameRaw);
         const regionZoneNameRaw = getEntZoneName('Region_Zone', d.gx, d.gy);
-        const regionZoneName = (formatZoneName(regionZoneNameRaw) || "LOCAL GRID").toUpperCase();
+        // 使用汉化翻译
+        const regionZoneName = translateMapName(regionZoneNameRaw) || "本地区域";
 
         const PADDING = 16;
         const PANEL_W = isMobile ? width - 30 : 320;
@@ -1285,12 +1593,13 @@ const TacticalSystem = {
 
             ctx.fillStyle = C_TEXT;
             let fontSize = 24;
-            ctx.font = `900 ${fontSize}px 'Exo 2', sans-serif`;
+            // 使用日系圆体字体显示地区名称
+            ctx.font = `900 ${fontSize}px 'M PLUS Rounded 1c', 'Exo 2', sans-serif`;
             let rW = ctx.measureText(regionNameDisplay).width;
             const maxW = (DIVIDER_X - leftCtxX) - 10;
             if (rW > maxW) {
                 fontSize = fontSize * (maxW / rW);
-                ctx.font = `900 ${fontSize}px 'Exo 2', sans-serif`;
+                ctx.font = `900 ${fontSize}px 'M PLUS Rounded 1c', 'Exo 2', sans-serif`;
             }
             const leftCenterY = lineY + (BODY_H / 2);
             ctx.fillText(regionNameDisplay, leftCtxX, leftCenterY);
@@ -1305,13 +1614,16 @@ const TacticalSystem = {
             const gridW = PANEL_W - (DIVIDER_X - PANEL_X) - 18;
             const colW = gridW / 2;
 
+            // 翻译生态区名称
+            const biomeNameTranslated = translateMapName(d.biomeName) || "-";
+            
             const gridData = [
-                { k: "BIOME",   v: d.biomeName || "-", c: "#00b894" },
-                { k: "INFRA",   v: d.infraText || "NO", c: d.infraText === "YES" ? "#e67e22" : null },
-                { k: "SURFACE", v: d.surfaceName || "-" },
-                { k: "MOVE",    v: d.travText || "OPEN", c: d.travText !== "OPEN" ? "#ff7675" : null },
-                { k: "ZONE",    v: regionZoneName },
-                { k: "TUNNEL",  v: d.tunnelText || "NULL", c: "#9b59b6" }
+                { k: "生态区",   v: biomeNameTranslated, c: "#00b894" },
+                { k: "设施",   v: d.infraText === "YES" ? "有" : "无", c: d.infraText === "YES" ? "#e67e22" : null },
+                { k: "地表", v: d.surfaceName || "-" },
+                { k: "通行",    v: d.travText === "OPEN" ? "畅通" : d.travText || "畅通", c: d.travText !== "OPEN" ? "#ff7675" : null },
+                { k: "区域",    v: regionZoneName },
+                { k: "地道",  v: d.tunnelText === "NULL" ? "无" : d.tunnelText || "无", c: "#9b59b6" }
             ];
 
             gridData.forEach((item, i) => {
@@ -1682,15 +1994,18 @@ const TacticalSystem = {
         
         const regionEntity = formatZoneName(tags.region);
         const regionIntName = formatZoneName(getIntGridTextName("Regions", regionIntVal));
-        const regionDisplay = regionEntity || regionIntName || (regionIntVal ? `SEC-${regionIntVal}` : "UNDEFINED");
-        const biomeDisplay = formatZoneName(tags.biome) || "---";
-        const surfaceName = (window.TERRAIN_CONFIG && window.TERRAIN_CONFIG[surfaceVal]?.type) || "VOID";
+        // 使用汉化翻译
+        const regionDisplay = translateMapName(regionEntity || regionIntName) || (regionIntVal ? `SEC-${regionIntVal}` : "未定义");
+        const biomeDisplay = translateMapName(formatZoneName(tags.biome)) || "---";
+        const surfaceNameRaw = (window.TERRAIN_CONFIG && window.TERRAIN_CONFIG[surfaceVal]?.type) || "VOID";
+        const surfaceName = translateMapName(surfaceNameRaw);
         
         // 计算显示坐标
         const MAP_CENTER_X = 26, MAP_CENTER_Y = 26;
         let coordsX = gx - MAP_CENTER_X; if (coordsX >= 0) coordsX += 1;
         let coordsY = MAP_CENTER_Y - gy - 1; if (coordsY >= 0) coordsY += 1;
         
+        const regionZoneRaw = getEntZoneName('Region_Zone', gx, gy);
         return {
             gx, gy,
             displayX: coordsX,
@@ -1698,7 +2013,7 @@ const TacticalSystem = {
             region: regionDisplay,
             biome: biomeDisplay,
             surface: surfaceName,
-            regionZone: formatZoneName(getEntZoneName('Region_Zone', gx, gy)) || "LOCAL GRID"
+            regionZone: translateMapName(formatZoneName(regionZoneRaw)) || "本地区域"
         };
     },
     
@@ -2046,16 +2361,18 @@ const TacticalSystem = {
             const textX = itemX + size + 12;
             const textTop = itemY + 18;
 
-            const pName = p.id.replace(/_/g, ' ').toUpperCase();
+            // 使用翻译函数获取中文名称
+            const pName = translatePokemonName(p.id);
             const maxNameWidth = itemWidth - size - 18;
             ctx.fillStyle = TACTICAL_STYLE.TXT_PRIMARY;
             let nameFontSize = 11;
-            ctx.font = `900 ${nameFontSize}px 'Exo 2', sans-serif`;
+            // 使用日系圆体字体显示宝可梦名称
+            ctx.font = `900 ${nameFontSize}px 'M PLUS Rounded 1c', 'Exo 2', sans-serif`;
             ctx.textAlign = "left";
             let nameWidth = ctx.measureText(pName).width;
             while (nameWidth > maxNameWidth && nameFontSize > 8) {
                 nameFontSize -= 0.5;
-                ctx.font = `900 ${nameFontSize}px 'Exo 2', sans-serif`;
+                ctx.font = `900 ${nameFontSize}px 'M PLUS Rounded 1c', 'Exo 2', sans-serif`;
                 nameWidth = ctx.measureText(pName).width;
             }
             ctx.fillText(pName, textX, textTop);
@@ -2398,7 +2715,8 @@ const TacticalSystem = {
 
         this._encounterPokemonList.forEach((poke) => {
             const pokemonId = poke.id || 'unknown';
-            const pokemonName = pokemonId.replace(/_/g, ' ').toUpperCase();
+            // 使用翻译函数获取中文名称
+            const pokemonName = translatePokemonName(pokemonId);
             const level = poke.level || '??';
             const rarity = (poke.rarity || 'common').toLowerCase();
             const conf = rarityConf[rarity] || rarityConf.common;
@@ -2473,7 +2791,7 @@ const TacticalSystem = {
             const info = document.createElement('div');
             info.style.cssText = 'flex:1; display:flex; flex-direction:column; justify-content:center; overflow:hidden;';
             info.innerHTML = `
-                <div style="font-weight:800; font-size:14px; color:#2d3436; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                <div style="font-family:'M PLUS Rounded 1c', sans-serif; font-weight:800; font-size:14px; color:#2d3436; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                     ${pokemonName}
                 </div>
                 <div style="display:flex; align-items:center; gap:6px;">
@@ -2551,8 +2869,8 @@ const TacticalSystem = {
         const encounterText = this._generateEncounterPrompt(pokemon);
         this._copyToClipboard(encounterText);
         
-        // 显示通知
-        const pokemonName = (pokemon.id || 'Unknown').replace(/_/g, ' ').toUpperCase();
+        // 显示通知 - 使用翻译后的名称
+        const pokemonName = translatePokemonName(pokemon.id || 'Unknown');
         this._showEncounterNotification(`遭遇 ${pokemonName}！`, true);
         
         console.log('[Tactical] 触发遭遇战:', pokemonName);
@@ -2561,7 +2879,8 @@ const TacticalSystem = {
     // 生成遭遇战提示词
     _generateEncounterPrompt: function(pokemon) {
         const currentInfo = this._getGridFullInfo(this.playerGrid.x, this.playerGrid.y);
-        const pokemonName = (pokemon.id || 'Unknown').replace(/_/g, ' ').toUpperCase();
+        // 使用翻译后的名称
+        const pokemonName = translatePokemonName(pokemon.id || 'Unknown');
         const level = pokemon.level || '??';
         const rarity = pokemon.rarity || 'common';
         

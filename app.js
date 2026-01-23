@@ -2,6 +2,83 @@
    TRAINER DATABASE (NPC立绘与配置)
    ============================================================ */
 
+/**
+ * 翻译招式名称为中文
+ * @param {string} moveName - 招式英文名称
+ * @returns {string} - 中文名称，如果没有翻译则返回原名
+ */
+function translateMoveName(moveName) {
+    if (!moveName) return '—';
+    
+    // 尝试从 translations 对象获取翻译
+    if (typeof translations !== 'undefined') {
+        // 直接匹配
+        if (translations[moveName]) {
+            return translations[moveName];
+        }
+        
+        // 尝试首字母大写格式
+        const capitalizedName = moveName.split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+        if (translations[capitalizedName]) {
+            return translations[capitalizedName];
+        }
+        
+        // 尝试连字符格式 (如 "Thunder-Punch" -> "Thunder Punch")
+        const hyphenName = moveName.replace(/-/g, ' ');
+        if (translations[hyphenName]) {
+            return translations[hyphenName];
+        }
+        
+        // 尝试下划线格式
+        const underscoreName = moveName.replace(/_/g, ' ');
+        if (translations[underscoreName]) {
+            return translations[underscoreName];
+        }
+    }
+    
+    // 没有翻译，返回原名
+    return moveName;
+}
+
+/**
+ * 翻译宝可梦名称为中文 (app.js 版本)
+ * @param {string} pokemonId - 宝可梦英文ID
+ * @returns {string} - 中文名称
+ */
+function translatePokemonNameApp(pokemonId) {
+    if (!pokemonId) return '???';
+    
+    let normalizedId = pokemonId.trim();
+    
+    if (typeof translations !== 'undefined') {
+        // 直接匹配 (首字母大写)
+        const capitalizedId = normalizedId.charAt(0).toUpperCase() + normalizedId.slice(1).toLowerCase();
+        if (translations[capitalizedId]) {
+            return translations[capitalizedId];
+        }
+        
+        // 处理带连字符的形态
+        if (normalizedId.includes('-')) {
+            const parts = normalizedId.split('-');
+            const formattedId = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('-');
+            if (translations[formattedId]) {
+                return translations[formattedId];
+            }
+        }
+        
+        // 尝试只匹配基础名称
+        const baseName = normalizedId.split(/[-_]/)[0];
+        const capitalizedBase = baseName.charAt(0).toUpperCase() + baseName.slice(1).toLowerCase();
+        if (translations[capitalizedBase]) {
+            return translations[capitalizedBase];
+        }
+    }
+    
+    return normalizedId.replace(/[-_]/g, ' ');
+}
+
 const RelationMeta = {
     '-2': { label: 'HOSTILE',  color: '#2d3436', light: '#636e72', icon: '☠️', desc: 'Enemy' },
     '-1': { label: 'COLD',     color: '#e17055', light: '#fab1a0', icon: '❄️', desc: 'Wary' },
@@ -1183,9 +1260,13 @@ function createCardHTML(pkm, slotIdStr) {
     
     let displayName = pkm.nickname || pkm.name;
     if (!pkm.nickname && pkm.species) {
-        displayName = pkm.species.charAt(0).toUpperCase() + pkm.species.slice(1);
+        // 使用翻译函数获取中文宝可梦名称
+        displayName = translatePokemonNameApp(pkm.species);
     }
-    displayName = displayName.toUpperCase();
+    // 如果没有翻译成功（返回的是英文），则转大写；中文名称保持原样
+    if (displayName && /^[a-zA-Z\s-]+$/.test(displayName)) {
+        displayName = displayName.toUpperCase();
+    }
 
     let genderHtml = '';
     const genderKey = (pkm.gender || '').toUpperCase();
@@ -1223,7 +1304,9 @@ function createCardHTML(pkm, slotIdStr) {
     const movesHtml = moveOrder.map(key => {
         const moveName = pkm?.moves?.[key];
         if (moveName) {
-            return `<div class="k-move-shell"><span>${moveName}</span></div>`;
+            // 翻译招式名称
+            const translatedMove = translateMoveName(moveName);
+            return `<div class="k-move-shell"><span>${translatedMove}</span></div>`;
         }
         return `<div class="k-move-shell empty"><span>—</span></div>`;
     }).join('');
@@ -1704,12 +1787,15 @@ function renderBoxPartyCard(pkm, idx) {
     const theme = getThemeColors(pkm.name); 
     const genderHtml = buildGenderMark(pkm.gender);
 
+    // 使用翻译函数获取中文宝可梦名称
+    const displayName = pkm.nickname || translatePokemonNameApp(pkm.name);
+
     return `
     <div class="box-char-card ${isSelected ? 'selected' : ''}" onclick="handlePartyClick(${idx})">
         <div class="bcc-inner">
             <div class="bcc-icon">${imgHtml}</div>
             <div class="bcc-info">
-                <div class="bcc-name">${pkm.nickname || pkm.name}</div>
+                <div class="bcc-name">${displayName}</div>
                 <div class="bcc-lv">Lv.${pkm.lv} ${genderHtml}</div>
             </div>
             <div class="bcc-type" style="background:${theme.p}"></div>
