@@ -166,6 +166,12 @@ window.addEventListener('message', function(event) {
             window.PokemonSpawnCache.updateFromEra(eraData);
         }
         
+        // 更新天气数据（从 ERA 读取）
+        if (eraData?.world_state?.weather_grid) {
+            window.weatherGridData = eraData.world_state.weather_grid;
+            console.log('[MAP] 天气数据已更新:', Object.keys(window.weatherGridData).length, '个格子');
+        }
+        
         // 更新异变状态
         if (eraData?.world_state?.phenomenon) {
             updatePhenomenonState(eraData.world_state.phenomenon);

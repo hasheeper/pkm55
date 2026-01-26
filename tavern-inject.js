@@ -2722,8 +2722,36 @@
                     await eraInsertWeatherGrid(newWeatherGrid);
                 }
                 
-                // 获取当前格子的天气
-                const currentWeatherConfig = WeatherSystem.getCurrentGridWeather(location.x, location.y, eraVars);
+                // 获取当前格子和周围13格的天气
+                const internal = LocationContextBackend.toInternalCoords(location.x, location.y);
+                const centerGx = internal.gx;
+                const centerGy = internal.gy;
+                const weatherGrid = eraVars?.world_state?.weather_grid || {};
+                
+                // 当前格子天气
+                const currentGridKey = `${centerGx}_${centerGy}`;
+                const currentWeatherConfig = weatherGrid[currentGridKey] || null;
+                
+                // 收集周围13格天气（距离为2）
+                const nearbyWeathers = [];
+                const offsets = [
+                    { dx: 0, dy: -1, dir: '北' }, { dx: 0, dy: 1, dir: '南' },
+                    { dx: -1, dy: 0, dir: '西' }, { dx: 1, dy: 0, dir: '东' },
+                    { dx: -1, dy: -1, dir: '西北' }, { dx: 1, dy: -1, dir: '东北' },
+                    { dx: -1, dy: 1, dir: '西南' }, { dx: 1, dy: 1, dir: '东南' },
+                    { dx: 0, dy: -2, dir: '北2' }, { dx: 0, dy: 2, dir: '南2' },
+                    { dx: -2, dy: 0, dir: '西2' }, { dx: 2, dy: 0, dir: '东2' }
+                ];
+                
+                for (const { dx, dy, dir } of offsets) {
+                    const gx = centerGx + dx;
+                    const gy = centerGy + dy;
+                    const key = `${gx}_${gy}`;
+                    const weather = weatherGrid[key];
+                    if (weather) {
+                        nearbyWeathers.push({ dir, weather: weather.weather, suppression: weather.suppression });
+                    }
+                }
                 
                 // ========== 获取当前格子的宝可梦（从 ERA 读取）==========
                 const currentPokemon = PokemonSpawnSystem.getCurrentGridPokemon(
@@ -2739,22 +2767,43 @@
                 );
                 
                 // ========== 添加天气信息到上下文 ==========
-                if (currentWeatherConfig) {
-                    // 简化显示：只显示天气和压制
-                    let weatherLine = `天气: ${currentWeatherConfig.weather}`;
-                    if (currentWeatherConfig.suppression?.suppressed?.length > 0) {
-                        weatherLine += ` (压制: ${currentWeatherConfig.suppression.suppressed.join('/')})`;
+                if (currentWeatherConfig || nearbyWeathers.length > 0) {
+                    const weatherLines = ['', '【天气状况】'];
+                    
+                    // 脚下天气
+                    if (currentWeatherConfig) {
+                        let currentLine = `脚下: ${currentWeatherConfig.weather}`;
+                        if (currentWeatherConfig.suppression?.suppressed?.length > 0) {
+                            currentLine += ` (压制: ${currentWeatherConfig.suppression.suppressed.join('/')})`;
+                        }
+                        weatherLines.push(currentLine);
                     }
                     
-                    // 在威胁度之后插入天气
-                    const threatPoint = contextText.indexOf('威胁度:');
-                    if (threatPoint > 0) {
-                        const lineEnd = contextText.indexOf('\n', threatPoint);
-                        if (lineEnd > 0) {
-                            const before = contextText.substring(0, lineEnd);
-                            const after = contextText.substring(lineEnd);
-                            contextText = before + '\n' + weatherLine + after;
+                    // 四周天气（按天气类型分组，减少冗余）
+                    if (nearbyWeathers.length > 0) {
+                        const weatherGroups = {};
+                        for (const nw of nearbyWeathers) {
+                            if (!weatherGroups[nw.weather]) {
+                                weatherGroups[nw.weather] = [];
+                            }
+                            weatherGroups[nw.weather].push(nw.dir);
                         }
+                        
+                        const nearbyParts = [];
+                        for (const [weather, dirs] of Object.entries(weatherGroups)) {
+                            nearbyParts.push(`${dirs.join('/')}:${weather}`);
+                        }
+                        weatherLines.push(`四周: ${nearbyParts.join(', ')}`);
+                    }
+                    
+                    // 在【周围环境】之前插入
+                    const insertPoint = contextText.indexOf('【周围环境】');
+                    if (insertPoint > 0) {
+                        const before = contextText.substring(0, insertPoint - 1);
+                        const after = contextText.substring(insertPoint - 1);
+                        contextText = before + weatherLines.join('\n') + '\n' + after;
+                    } else {
+                        contextText += weatherLines.join('\n');
                     }
                 }
                 
