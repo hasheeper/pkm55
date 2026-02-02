@@ -1835,7 +1835,8 @@
             },
             
             // 为玩家周围13格生成天气（类似 pokemon_spawns）
-            async generateForNearbyGrids(x, y, eraVars) {
+            // forceRefresh: true 时忽略已存在的天气数据，用于每日刷新
+            async generateForNearbyGrids(x, y, eraVars, forceRefresh = false) {
                 await this.loadClimateData();
                 if (!this.climateData) return null;
                 
@@ -1844,8 +1845,8 @@
                 const centerGx = internal.gx;
                 const centerGy = internal.gy;
                 
-                // 获取已存在的天气数据
-                const existingWeather = eraVars?.world_state?.weather_grid || {};
+                // 获取已存在的天气数据（forceRefresh 时忽略）
+                const existingWeather = forceRefresh ? {} : (eraVars?.world_state?.weather_grid || {});
                 
                 // 13格偏移（与 pokemon_spawns 一致）
                 const offsets = [
@@ -1862,7 +1863,7 @@
                     const gy = centerGy + dy;
                     const key = `${gx}_${gy}`;
                     
-                    // 只增不改
+                    // 只增不改（forceRefresh 时跳过此检查）
                     if (existingWeather[key]) continue;
                     
                     // 获取该格子的气候区
@@ -2534,31 +2535,44 @@
             }
         }
         
-        // 刷新宝可梦区域数据（每日刷新）- 先删除再插入，合并成一个消息操作
-        async function eraRefreshPokemonSpawns(newSpawns) {
+        // 刷新宝可梦和天气数据（每日刷新）- 先删除再插入，合并成一个消息操作
+        async function eraRefreshPokemonAndWeather(newSpawns, newWeather) {
             try {
-                // 构建 VariableDelete 块
+                // 构建 VariableDelete 块（同时删除 pokemon_spawns 和 weather_grid）
                 const variableDeleteData = {
                     world_state: {
-                        pokemon_spawns: {}
+                        pokemon_spawns: {},
+                        weather_grid: {}
                     }
                 };
                 const variableDeleteJson = JSON.stringify(variableDeleteData, null, 2);
                 const variableDeleteBlock = `<VariableDelete>\n${variableDeleteJson}\n</VariableDelete>`;
                 
-                // 构建 VariableInsert 块（如果有新数据）
-                let variableInsertBlock = '';
+                // 构建 VariableInsert 块（宝可梦）
+                let pokemonInsertBlock = '';
                 if (newSpawns && Object.keys(newSpawns).length > 0) {
-                    const variableInsertData = {
+                    const pokemonInsertData = {
                         world_state: {
                             pokemon_spawns: newSpawns
                         }
                     };
-                    const variableInsertJson = JSON.stringify(variableInsertData, null, 2);
-                    variableInsertBlock = `<VariableInsert>\n${variableInsertJson}\n</VariableInsert>`;
+                    const pokemonInsertJson = JSON.stringify(pokemonInsertData, null, 2);
+                    pokemonInsertBlock = `<VariableInsert>\n${pokemonInsertJson}\n</VariableInsert>`;
                 }
                 
-                console.log('[PKM] [POKEMON] 生成 VariableDelete + VariableInsert（每日刷新）');
+                // 构建 VariableInsert 块（天气）
+                let weatherInsertBlock = '';
+                if (newWeather && Object.keys(newWeather).length > 0) {
+                    const weatherInsertData = {
+                        world_state: {
+                            weather_grid: newWeather
+                        }
+                    };
+                    const weatherInsertJson = JSON.stringify(weatherInsertData, null, 2);
+                    weatherInsertBlock = `<VariableInsert>\n${weatherInsertJson}\n</VariableInsert>`;
+                }
+                
+                console.log('[PKM] [REFRESH] 生成 VariableDelete + VariableInsert（每日刷新：宝可梦+天气）');
                 
                 // 获取最近一楼消息ID
                 const messageId = getLastMessageId();
@@ -2579,8 +2593,11 @@
                 
                 // 先删除再插入，合并追加到消息末尾
                 content = content.trim() + '\n\n' + variableDeleteBlock;
-                if (variableInsertBlock) {
-                    content += '\n' + variableInsertBlock;
+                if (pokemonInsertBlock) {
+                    content += '\n' + pokemonInsertBlock;
+                }
+                if (weatherInsertBlock) {
+                    content += '\n' + weatherInsertBlock;
                 }
                 
                 // 更新消息
@@ -2589,10 +2606,10 @@
                     message: content
                 }], { refresh: 'affected' });
                 
-                console.log('[PKM] ✓ 宝可梦区域已刷新（删除+插入）:', Object.keys(newSpawns || {}));
+                console.log('[PKM] ✓ 每日刷新完成 - 宝可梦:', Object.keys(newSpawns || {}).length, '个区域, 天气:', Object.keys(newWeather || {}).length, '个格子');
                 return true;
             } catch (e) {
-                console.error('[PKM] [POKEMON] 刷新失败:', e);
+                console.error('[PKM] [REFRESH] 每日刷新失败:', e);
                 return false;
             }
         }
@@ -3070,9 +3087,9 @@ ${contextText}
                 injectLocationContext(); // 切换对话时也刷新位置注入
             });
             
-            // ========== 监听宝可梦刷新事件（由 pkm-tavern-plugin.js 触发）==========
+            // ========== 监听每日刷新事件（由 pkm-tavern-plugin.js 触发）==========
             eventOn('pkm:refreshPokemonSpawns', async (detail) => {
-                console.log('[PKM] [POKEMON] 收到刷新事件:', detail);
+                console.log('[PKM] [REFRESH] 收到每日刷新事件:', detail);
                 try {
                     // 确保数据已加载
                     await LocationContextBackend.loadData();
@@ -3081,7 +3098,7 @@ ${contextText}
                     const eraVars = await getEraVars();
                     const location = eraVars?.world_state?.location;
                     if (!location || typeof location.x !== 'number') {
-                        console.warn('[PKM] [POKEMON] 无位置数据，跳过刷新');
+                        console.warn('[PKM] [REFRESH] 无位置数据，跳过刷新');
                         return;
                     }
                     
@@ -3106,12 +3123,20 @@ ${contextText}
                         true // forceRefresh = true
                     );
                     
-                    // 执行刷新（删除+插入）
-                    await eraRefreshPokemonSpawns(newSpawns);
+                    // 生成新的天气数据（强制刷新）
+                    const newWeather = await WeatherSystem.generateForNearbyGrids(
+                        location.x,
+                        location.y,
+                        eraVars,
+                        true // forceRefresh = true
+                    );
                     
-                    console.log('[PKM] [POKEMON] ✓ 刷新完成');
+                    // 执行刷新（删除+插入：宝可梦+天气）
+                    await eraRefreshPokemonAndWeather(newSpawns, newWeather);
+                    
+                    console.log('[PKM] [REFRESH] ✓ 每日刷新完成');
                 } catch (e) {
-                    console.error('[PKM] [POKEMON] 刷新失败:', e);
+                    console.error('[PKM] [REFRESH] 每日刷新失败:', e);
                 }
             });
             
