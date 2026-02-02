@@ -492,6 +492,36 @@ function injectMovePoolStyles() {
     console.log('[MOVE_POOL] 样式由 styles.css 提供 (Ver. Dawn)');
 }
 
+const TRANSLATION_NORMALIZATION_CACHE_APP = {
+    normalizedMap: null
+};
+
+function normalizeTranslationKeyApp(key) {
+    return String(key || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+function resolveNormalizedTranslationValue(key) {
+    if (typeof window !== 'undefined' && typeof window.getNormalizedTranslationValue === 'function') {
+        return window.getNormalizedTranslationValue(key);
+    }
+    if (!key || typeof translations === 'undefined') return null;
+    if (!TRANSLATION_NORMALIZATION_CACHE_APP.normalizedMap) {
+        const map = {};
+        for (const originalKey in translations) {
+            const normalizedKey = normalizeTranslationKeyApp(originalKey);
+            if (!(normalizedKey in map)) {
+                map[normalizedKey] = translations[originalKey];
+            }
+        }
+        TRANSLATION_NORMALIZATION_CACHE_APP.normalizedMap = map;
+    }
+    const normalizedKey = normalizeTranslationKeyApp(key);
+    return TRANSLATION_NORMALIZATION_CACHE_APP.normalizedMap[normalizedKey] || null;
+}
+
 /**
  * 翻译招式名称为中文
  * @param {string} moveName - 招式英文名称
@@ -521,10 +551,22 @@ function translateMoveName(moveName) {
             return translations[hyphenName];
         }
         
+        // 尝试将空格统一为连字符 (如 "Double Edge" -> "Double-Edge")
+        const dashName = moveName.replace(/\s+/g, '-');
+        if (translations[dashName]) {
+            return translations[dashName];
+        }
+        
         // 尝试下划线格式
         const underscoreName = moveName.replace(/_/g, ' ');
         if (translations[underscoreName]) {
             return translations[underscoreName];
+        }
+
+        // 归一化匹配（忽略空格/符号差异）
+        const normalizedResult = resolveNormalizedTranslationValue(moveName);
+        if (normalizedResult) {
+            return normalizedResult;
         }
     }
     
