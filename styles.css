@@ -240,6 +240,10 @@ body {
     /* 横向必须 Hidden 防止出现横条 */
     overflow-x: hidden;
     
+    /* [Mobile Fix] 允许触屏纵向滚动 */
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    
     /* 提升层级，防止被 nav 阴影遮挡 */
     z-index: 10;
     
@@ -2322,8 +2326,9 @@ body {
     padding: 0 !important;
     gap: 8px !important;
     flex-direction: column;
-    height: 100%;
-    overflow: hidden;
+    min-height: 100%;
+    height: auto;
+    overflow: visible;
     display: none !important;
     align-content: start !important;
 }

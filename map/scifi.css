@@ -32,6 +32,11 @@ html, body {
     top: 0;
     left: 0;
     z-index: 0;
+    touch-action: none;
+}
+
+#gameCanvas {
+    touch-action: none;
 }
 
 /* =========================================

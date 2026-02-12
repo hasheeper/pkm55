@@ -1290,6 +1290,57 @@ function bindEvents() {
     });
     window.addEventListener('mouseup', () => isDragging=false );
     window.addEventListener('mouseleave', () => isDragging=false );
+
+    // [Mobile Touch] 拖拽 + 双指缩放
+    let _touchLastDist = 0;
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if(e.touches.length === 1) {
+            isDragging = true;
+            lastMouse = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+        } else if(e.touches.length === 2) {
+            isDragging = false;
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            _touchLastDist = Math.sqrt(dx*dx + dy*dy);
+        }
+    }, {passive:false});
+    canvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if(e.touches.length === 1 && isDragging) {
+            const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+            if(!(window.TacticalSystem && window.TacticalSystem._movementMode)) {
+                camera.x += tx - lastMouse.x;
+                camera.y += ty - lastMouse.y;
+                limitCameraBounds();
+            }
+            lastMouse = {x: tx, y: ty};
+        } else if(e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(_touchLastDist > 0) {
+                const ZOOM_MAX = 6.0, ZOOM_MIN = 0.5;
+                const scale = dist / _touchLastDist;
+                let nextZ = camera.zoom * scale;
+                nextZ = Math.max(ZOOM_MIN, Math.min(nextZ, ZOOM_MAX));
+                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                const rect = canvas.getBoundingClientRect();
+                const mx = (midX - rect.left - camera.x) / camera.zoom;
+                const my = (midY - rect.top - camera.y) / camera.zoom;
+                camera.x -= mx * (nextZ - camera.zoom);
+                camera.y -= my * (nextZ - camera.zoom);
+                camera.zoom = nextZ;
+                limitCameraBounds();
+            }
+            _touchLastDist = dist;
+        }
+    }, {passive:false});
+    canvas.addEventListener('touchend', e => {
+        if(e.touches.length < 2) _touchLastDist = 0;
+        if(e.touches.length === 0) isDragging = false;
+    });
     
     // Zoom
     canvas.addEventListener('wheel', e => {

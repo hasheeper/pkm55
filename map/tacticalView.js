@@ -630,12 +630,47 @@ const TacticalSystem = {
         window.addEventListener('mouseup', this._up);
         window.addEventListener('mousemove', this._move);
         window.addEventListener('click', this._click);
+
+        // [Mobile Touch] 触屏拖拽支持
+        this._touchStart = e => {
+            if(e.touches.length === 1) {
+                const t = e.touches[0];
+                if (this.handlePokemonPanelClick(t.clientX, t.clientY)) return;
+                this.isDragging = true;
+                this.lastMouse = {x: t.clientX, y: t.clientY};
+            }
+            e.preventDefault();
+        };
+        this._touchMove = e => {
+            if(e.touches.length === 1 && this.isDragging) {
+                const t = e.touches[0];
+                this.cam.inputX += t.clientX - this.lastMouse.x;
+                this.cam.inputY += t.clientY - this.lastMouse.y;
+                const dragLimit = TACTICAL_STYLE.TILE_SIZE * 1.2;
+                this.cam.inputX = Math.max(-dragLimit, Math.min(dragLimit, this.cam.inputX));
+                this.cam.inputY = Math.max(-dragLimit, Math.min(dragLimit, this.cam.inputY));
+                this.lastMouse = {x: t.clientX, y: t.clientY};
+            }
+            e.preventDefault();
+        };
+        this._touchEnd = e => {
+            if(e.touches.length === 0) {
+                // 模拟点击：如果几乎没有移动，触发移动模式选择
+                this.isDragging = false;
+            }
+        };
+        window.addEventListener('touchstart', this._touchStart, {passive:false});
+        window.addEventListener('touchmove', this._touchMove, {passive:false});
+        window.addEventListener('touchend', this._touchEnd);
     },
     unbindEvents: function() {
         if(this._down) window.removeEventListener('mousedown', this._down);
         if(this._up) window.removeEventListener('mouseup', this._up);
         if(this._move) window.removeEventListener('mousemove', this._move);
         if(this._click) window.removeEventListener('click', this._click);
+        if(this._touchStart) window.removeEventListener('touchstart', this._touchStart);
+        if(this._touchMove) window.removeEventListener('touchmove', this._touchMove);
+        if(this._touchEnd) window.removeEventListener('touchend', this._touchEnd);
     },
 
     checkHover: function(mx, my) {
