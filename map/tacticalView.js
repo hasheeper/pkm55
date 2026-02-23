@@ -631,8 +631,10 @@ const TacticalSystem = {
         window.addEventListener('mousemove', this._move);
         window.addEventListener('click', this._click);
 
-        // [Mobile Touch] 触屏拖拽支持
+        // [Mobile Touch] 触屏拖拽支持 — 仅在 canvas 上拦截，不阻止 UI 按钮点击
+        const _cvs = this.ctx.canvas;
         this._touchStart = e => {
+            if(e.target !== _cvs) return; // 不拦截按钮等 UI 元素
             if(e.touches.length === 1) {
                 const t = e.touches[0];
                 if (this.handlePokemonPanelClick(t.clientX, t.clientY)) return;
@@ -642,7 +644,8 @@ const TacticalSystem = {
             e.preventDefault();
         };
         this._touchMove = e => {
-            if(e.touches.length === 1 && this.isDragging) {
+            if(!this.isDragging) return;
+            if(e.touches.length === 1) {
                 const t = e.touches[0];
                 this.cam.inputX += t.clientX - this.lastMouse.x;
                 this.cam.inputY += t.clientY - this.lastMouse.y;
@@ -655,7 +658,6 @@ const TacticalSystem = {
         };
         this._touchEnd = e => {
             if(e.touches.length === 0) {
-                // 模拟点击：如果几乎没有移动，触发移动模式选择
                 this.isDragging = false;
             }
         };

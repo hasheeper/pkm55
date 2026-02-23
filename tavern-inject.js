@@ -3040,6 +3040,148 @@ ${contextText}
             }, 150); // 150ms 防抖
         }
         
+        // ========== Transfer Buffer 处理逻辑 ==========
+        let transferBufferLock = false;
+        
+        async function handleTransferBuffer() {
+            // 防抖锁
+            if (transferBufferLock) {
+                console.log('[PKM] [TRANSFER] 正在处理中，忽略重复请求');
+                return;
+            }
+            
+            try {
+                const eraVars = await getEraVars();
+                const transferBuffer = eraVars?.player?.party?.transfer_buffer;
+                
+                // 检查 transfer_buffer 是否有内容（name 不为 null）
+                if (!transferBuffer || !transferBuffer.name) {
+                    return; // 没有需要传输的内容
+                }
+                
+                transferBufferLock = true;
+                console.log('[PKM] [TRANSFER] 检测到 transfer_buffer 有内容:', transferBuffer.name);
+                
+                // 查找第一个空的盒子位置
+                const box = eraVars?.player?.box || {};
+                const existingKeys = Object.keys(box);
+                const existingIds = existingKeys
+                    .filter(k => k.startsWith('storage_'))
+                    .map(k => parseInt(k.split('_')[1]) || 0);
+                const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+                const newBoxKey = `storage_${String(nextId).padStart(2, '0')}`;
+                
+                // 准备盒子数据（移除 slot 字段）
+                const boxData = JSON.parse(JSON.stringify(transferBuffer));
+                delete boxData.slot;
+                
+                // 准备空的 transfer_buffer 结构
+                const emptyTransferBuffer = {
+                    slot: 7,
+                    name: null,
+                    nickname: null,
+                    species: null,
+                    gender: null,
+                    lv: null,
+                    quality: null,
+                    nature: null,
+                    ability: null,
+                    shiny: false,
+                    item: null,
+                    mechanic: null,
+                    teraType: null,
+                    isAce: false,
+                    isLead: false,
+                    friendship: {
+                        avs: { trust: 0, passion: 0, insight: 0, devotion: 0 },
+                        av_up: { trust: 0, passion: 0, insight: 0, devotion: 0 }
+                    },
+                    moves: {
+                        move1: null,
+                        move2: null,
+                        move3: null,
+                        move4: null
+                    },
+                    stats_meta: {
+                        ivs: { hp: null, atk: null, def: null, spa: null, spd: null, spe: null },
+                        ev_level: 0,
+                        ev_up: 0
+                    },
+                    notes: null
+                };
+                
+                // 构建 VariableInsert（插入盒子）和 VariableEdit（清空 transfer_buffer）
+                const variableInsertData = {
+                    player: {
+                        box: {
+                            [newBoxKey]: boxData
+                        }
+                    }
+                };
+                
+                const variableEditData = {
+                    player: {
+                        party: {
+                            transfer_buffer: emptyTransferBuffer
+                        }
+                    }
+                };
+                
+                const variableInsertJson = JSON.stringify(variableInsertData, null, 2);
+                const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                // 验证 JSON 格式（确保有最外层的 {}）
+                if (!variableEditJson.startsWith('{') || !variableEditJson.endsWith('}')) {
+                    console.error('[PKM] [TRANSFER] VariableEdit JSON 格式错误:', variableEditJson);
+                }
+                const variableInsertBlock = `<VariableInsert>\n${variableInsertJson}\n</VariableInsert>`;
+                const variableEditBlock = `<VariableEdit>\n${variableEditJson}\n</VariableEdit>`;
+                
+                console.log('[PKM] [TRANSFER] 生成 VariableInsert:', variableInsertBlock);
+                
+                // 获取最近一楼消息
+                const lastMessageId = getLastMessageId();
+                const messages = getChatMessages(lastMessageId);
+                
+                if (!messages || messages.length === 0) {
+                    console.warn('[PKM] [TRANSFER] 无法获取最近消息');
+                    return;
+                }
+                
+                const msg = messages[0];
+                let content = msg.message || '';
+                
+                // 在末尾追加 VariableInsert 和 VariableEdit
+                content = content.trim() + '\n\n' + variableInsertBlock + '\n\n' + variableEditBlock;
+                console.log('[PKM] [TRANSFER] 追加传输指令到消息末尾');
+                
+                // 更新消息
+                await setChatMessages([{
+                    message_id: lastMessageId,
+                    message: content
+                }], { refresh: 'affected' });
+                
+                console.log(`[PKM] [TRANSFER] ✓ 已将 ${transferBuffer.name} 传输到盒子 ${newBoxKey}`);
+                
+                // 立即触发 ERA 变量更新
+                if (typeof eventEmit !== 'undefined') {
+                    // 先插入盒子
+                    eventEmit('era:updateByObject', variableInsertData);
+                    // 再清空 transfer_buffer
+                    eventEmit('era:updateByObject', variableEditData);
+                    console.log('[PKM] [TRANSFER] ✓ ERA 变量已更新');
+                }
+                
+                // 刷新面板
+                setTimeout(() => refreshDashboard(), 100);
+                
+            } catch (e) {
+                console.error('[PKM] [TRANSFER] 处理失败:', e);
+            } finally {
+                // 1秒后解锁
+                setTimeout(() => { transferBufferLock = false; }, 1000);
+            }
+        }
+        
         // ========== 监听酒馆事件 ==========
         // 防抖标志：防止 era:writeDone -> injectLocationContext -> ERA写入 -> era:writeDone 死循环
         let isProcessingEraEvent = false;
@@ -3066,6 +3208,8 @@ ${contextText}
                     try {
                         refreshDashboard();
                         await injectLocationContext();
+                        // 检测 transfer_buffer 并处理
+                        handleTransferBuffer();
                     } finally {
                         // 延迟重置标志，确保后续的 writeDone 事件被跳过
                         setTimeout(() => {
@@ -3079,6 +3223,8 @@ ${contextText}
                 console.log('[PKM] 检测到消息生成完成，刷新面板和位置注入');
                 refreshDashboard();
                 injectLocationContext(); // 刷新位置上下文注入
+                // 检测 transfer_buffer 并处理
+                handleTransferBuffer();
             });
             
             eventOn('chat_changed', () => {
