@@ -6199,25 +6199,6 @@ if (typeof window !== 'undefined') {
   const PLUGIN_NAME = '[PKM战斗插件]';
   const PKM_BATTLE_TAG = 'PKM_BATTLE';
   const PKM_INJECT_ID = 'pkm_player_data';
-  const PLUGIN_STATE_KEY = '__pkmBattlePluginState';
-  const existingPluginState = window[PLUGIN_STATE_KEY];
-  if (existingPluginState && typeof existingPluginState.destroy === 'function') {
-    console.log(`${PLUGIN_NAME} 检测到旧实例，准备先卸载再重载...`);
-    try {
-      await existingPluginState.destroy('reload');
-    } catch (e) {
-      console.warn(`${PLUGIN_NAME} 卸载旧实例失败:`, e);
-    }
-  }
-  const pluginState = {
-    destroy: null,
-    handlers: {},
-    eventEmitWrapped: false,
-    originalEventEmit: null,
-    wrappedEventEmit: null,
-    apiReadyTimer: null
-  };
-  window[PLUGIN_STATE_KEY] = pluginState;
   
   // 防重复处理
   let lastHandledMk = null;
@@ -10337,54 +10318,6 @@ ${unlockItem.effect}
     }
   }
 
-  async function destroyPlugin(reason = 'reload') {
-    console.log(`${PLUGIN_NAME} 开始卸载实例: ${reason}`);
-
-    try {
-      if (typeof eventRemoveListener !== 'undefined') {
-        if (pluginState.handlers.onChatChanged) eventRemoveListener('CHAT_CHANGED', pluginState.handlers.onChatChanged);
-        if (pluginState.handlers.onMessageSwiped) eventRemoveListener('tavern_events.MESSAGE_SWIPED', pluginState.handlers.onMessageSwiped);
-        if (pluginState.handlers.onMessageEdited) eventRemoveListener('tavern_events.MESSAGE_EDITED', pluginState.handlers.onMessageEdited);
-        if (pluginState.handlers.onGenerationAfterCommands) eventRemoveListener('GENERATION_AFTER_COMMANDS', pluginState.handlers.onGenerationAfterCommands);
-        if (pluginState.handlers.onEraWriteDone) eventRemoveListener('era:writeDone', pluginState.handlers.onEraWriteDone);
-      }
-    } catch (e) {
-      console.warn(`${PLUGIN_NAME} 解绑事件失败:`, e);
-    }
-
-    if (pluginState.apiReadyTimer) {
-      clearTimeout(pluginState.apiReadyTimer);
-      pluginState.apiReadyTimer = null;
-    }
-
-    try {
-      if (typeof uninjectPrompts === 'function') {
-        uninjectPrompts([PKM_INJECT_ID, NPC_INJECT_ID, TIME_INJECT_ID, 'pkm_unlock_events']);
-      }
-    } catch (e) {
-      // 忽略清理失败
-    }
-
-    window._unlockEventInjected = false;
-
-    if (window.PKMPlugin && window.PKMPlugin.__state === pluginState) {
-      delete window.PKMPlugin;
-    }
-
-    if (pluginState.eventEmitWrapped && window.eventEmit === pluginState.wrappedEventEmit && pluginState.originalEventEmit) {
-      window.eventEmit = pluginState.originalEventEmit;
-    }
-
-    if (window[PLUGIN_STATE_KEY] === pluginState) {
-      delete window[PLUGIN_STATE_KEY];
-    }
-
-    isProcessing = false;
-    lastHandledMk = null;
-  }
-
-  pluginState.destroy = destroyPlugin;
-
   // ============================================
   //    初始化 & 事件绑定
   // ============================================
@@ -10392,25 +10325,22 @@ ${unlockItem.effect}
   // 等待酒馆助手API可用
   let retries = 0;
   while (typeof eventEmit === 'undefined' && retries < 30) {
-    await new Promise(resolve => {
-      pluginState.apiReadyTimer = setTimeout(resolve, 100);
-    });
-    pluginState.apiReadyTimer = null;
+    await wait(100);
     retries++;
   }
 
   if (typeof eventEmit === 'undefined') {
     console.error(`${PLUGIN_NAME} 酒馆助手API不可用，插件无法启动`);
-    if (window[PLUGIN_STATE_KEY] === pluginState) {
-      delete window[PLUGIN_STATE_KEY];
-    }
     return;
   }
 
-  const onChatChanged = () => resetState('切换对话');
-  const onMessageSwiped = () => resetState('消息重骰');
-  const onMessageEdited = () => resetState('消息编辑');
-  const onGenerationAfterCommands = async (detail) => {
+  // 监听事件
+  eventOn('CHAT_CHANGED', () => resetState('切换对话'));
+  eventOn('tavern_events.MESSAGE_SWIPED', () => resetState('消息重骰'));
+  eventOn('tavern_events.MESSAGE_EDITED', () => resetState('消息编辑'));
+
+  // 监听生成前事件 - 注入玩家队伍数据到上下文 + NPC 状态 + 时间状态
+  eventOn('GENERATION_AFTER_COMMANDS', async (detail) => {
     // 0. 清除上次的解锁事件注入（如果有）
     await clearUnlockEventInjection();
     
@@ -10428,34 +10358,15 @@ ${unlockItem.effect}
     
     // 5. 注入时间状态
     await handleTimeInject();
-  };
-
-  const onEraWriteDone = async (detail) => {
-    await handleWriteDone(detail);
-  };
-
-  pluginState.handlers = {
-    onChatChanged,
-    onMessageSwiped,
-    onMessageEdited,
-    onGenerationAfterCommands,
-    onEraWriteDone
-  };
-
-  // 监听事件
-  eventOn('CHAT_CHANGED', onChatChanged);
-  eventOn('tavern_events.MESSAGE_SWIPED', onMessageSwiped);
-  eventOn('tavern_events.MESSAGE_EDITED', onMessageEdited);
-
-  // 监听生成前事件 - 注入玩家队伍数据到上下文 + NPC 状态 + 时间状态
-  eventOn('GENERATION_AFTER_COMMANDS', onGenerationAfterCommands);
+  });
 
   // 监听 era:writeDone 事件 - 处理AI输出的战斗标签
-  eventOn('era:writeDone', onEraWriteDone);
+  eventOn('era:writeDone', async (detail) => {
+    await handleWriteDone(detail);
+  });
 
   // 暴露全局接口供外部调用
   window.PKMPlugin = {
-    __state: pluginState,
     // 获取玩家队伍
     getPlayerParty,
     
@@ -10669,31 +10580,21 @@ ${unlockItem.effect}
   }
   
   // 拦截 era:updateByObject 事件
-  const currentEventEmit = window.eventEmit;
-  if (currentEventEmit && currentEventEmit.__pkmBattleWrapped) {
-    pluginState.originalEventEmit = currentEventEmit.__pkmBattleOriginal || currentEventEmit;
-    pluginState.wrappedEventEmit = currentEventEmit;
-    console.log(`${PLUGIN_NAME} ERA 变量更新拦截器已存在，跳过重复安装`);
-  } else if (currentEventEmit) {
-    pluginState.originalEventEmit = currentEventEmit;
-    const wrappedEventEmit = function(eventName, data) {
+  const originalEventEmit = window.eventEmit;
+  if (originalEventEmit) {
+    window.eventEmit = function(eventName, data) {
       if (eventName === 'era:updateByObject' && data) {
         console.log(`${PLUGIN_NAME} [拦截] 检测到 ERA 变量更新事件`);
         
         // 异步预处理（需要读取当前 ERA 变量）
         preprocessEraUpdate(data).then(processedData => {
-          pluginState.originalEventEmit.call(window, eventName, processedData);
+          originalEventEmit.call(window, eventName, processedData);
         });
       } else {
         // 其他事件直接透传
-        pluginState.originalEventEmit.apply(window, arguments);
+        originalEventEmit.apply(window, arguments);
       }
     };
-    wrappedEventEmit.__pkmBattleWrapped = true;
-    wrappedEventEmit.__pkmBattleOriginal = currentEventEmit;
-    pluginState.wrappedEventEmit = wrappedEventEmit;
-    pluginState.eventEmitWrapped = true;
-    window.eventEmit = wrappedEventEmit;
     console.log(`${PLUGIN_NAME} ✓ ERA 变量更新拦截器已安装（ev_up/proficiency_up 自动累加模式）`);
   }
 

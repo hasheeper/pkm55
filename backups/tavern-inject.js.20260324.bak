@@ -20,30 +20,6 @@
     }
     
     waitForJQuery(function($) {
-        const existingRuntime = window.__pkmTavernInjectState;
-        if (existingRuntime && typeof existingRuntime.teardown === 'function') {
-            console.log('[PKM] 检测到旧实例，准备先卸载再重载...');
-            try {
-                existingRuntime.teardown('reload');
-            } catch (e) {
-                console.warn('[PKM] 卸载旧实例失败:', e);
-            }
-        }
-
-        const runtimeState = {
-            teardown: null,
-            windowMessageHandler: null,
-            topWindowMessageHandler: null,
-            pagehideHandler: null,
-            keydownHandler: null,
-            onEraWriteDone: null,
-            onGenerationEnded: null,
-            onChatChanged: null,
-            onRefreshPokemonSpawns: null,
-            topWindowRef: null
-        };
-        window.__pkmTavernInjectState = runtimeState;
-
         console.log('[PKM] 悬浮球脚本加载中...');
         
         // 清理旧元素
@@ -222,48 +198,8 @@
         $('body').append(container).append(overlay).append(hiddenIframe);
         
         // ========== ERA 变量获取 ==========
-        const ERA_VARS_CACHE_TTL_MS = 250;
-        const CHAT_SCAN_CACHE_TTL_MS = 1500;
-        const locationContextState = {
-            hydratedWorldKey: null,
-            lastSignature: null,
-            promptContent: null,
-            npcScanKey: null,
-            npcTriggerSection: '',
-            npcScanAt: 0,
-            inFlightPromise: null
-        };
-        const eraVarsCache = {
-            value: null,
-            fetchedAt: 0,
-            promise: null
-        };
-
-        function setEraVarsCache(value) {
-            eraVarsCache.value = value;
-            eraVarsCache.fetchedAt = Date.now();
-            return value;
-        }
-
-        function invalidateEraVarsCache() {
-            eraVarsCache.value = null;
-            eraVarsCache.fetchedAt = 0;
-            eraVarsCache.promise = null;
-        }
-
-        async function getEraVars(options = {}) {
-            const force = options.force === true;
-            const maxAgeMs = options.maxAgeMs ?? ERA_VARS_CACHE_TTL_MS;
-
-            if (!force && eraVarsCache.value && (Date.now() - eraVarsCache.fetchedAt) < maxAgeMs) {
-                return eraVarsCache.value;
-            }
-
-            if (!force && eraVarsCache.promise) {
-                return eraVarsCache.promise;
-            }
-
-            const queryPromise = new Promise((resolve) => {
+        async function getEraVars() {
+            return new Promise((resolve) => {
                 if (typeof eventEmit === 'undefined' || typeof eventOn === 'undefined') {
                     console.warn('[PKM] eventEmit/eventOn 不可用');
                     resolve(null);
@@ -284,11 +220,6 @@
                 
                 eventEmit('era:getCurrentVars');
             });
-
-            eraVarsCache.promise = queryPromise;
-            const result = await queryPromise;
-            eraVarsCache.promise = null;
-            return result ? setEraVarsCache(result) : result;
         }
         
         // ========== 位置上下文生成器（后端版本，完整逻辑）==========
@@ -2504,7 +2435,6 @@
         // 插入 ERA 变量（只增不改）
         function insertEraVars(data) {
             if (typeof eventEmit === 'function') {
-                invalidateEraVarsCache();
                 eventEmit('era:insertByObject', data);
             }
         }
@@ -2512,7 +2442,6 @@
         // 更新 ERA 变量
         function updateEraVars(data) {
             if (typeof eventEmit === 'function') {
-                invalidateEraVarsCache();
                 eventEmit('era:updateByObject', data);
             }
         }
@@ -2752,121 +2681,14 @@
                 return false;
             }
         }
-
-        function buildWeatherSignature(currentWeatherConfig, nearbyWeathers) {
-            const currentSig = currentWeatherConfig
-                ? `${currentWeatherConfig.weather || 'clear'}:${(currentWeatherConfig.suppression?.suppressed || []).join('/')}`
-                : 'none';
-            const nearbySig = nearbyWeathers
-                .map(({ dir, weather, suppression }) => `${dir}:${weather}:${(suppression?.suppressed || []).join('/')}`)
-                .sort()
-                .join('|');
-            return `${currentSig}__${nearbySig}`;
-        }
-
-        function buildPokemonSignature(currentPokemon) {
-            return (currentPokemon || [])
-                .map(poke => `${poke.id || 'unknown'}:${poke.level || ''}:${poke.rarity || ''}`)
-                .join('|');
-        }
-
-        function getRecentMessagesForNpcScan(historyDepth = 10) {
-            if (typeof getChatMessages !== 'function' || typeof getLastMessageId !== 'function') {
-                return [];
-            }
-
-            const lastMessageId = Number(getLastMessageId());
-            if (!Number.isFinite(lastMessageId) || lastMessageId < 0) {
-                return [];
-            }
-
-            const startMessageId = Math.max(0, lastMessageId - historyDepth + 1);
-            return getChatMessages(`${startMessageId}-${lastMessageId}`) || [];
-        }
-
-        function getNpcTriggerSection(force = false) {
-            const historyDepth = 10;
-            const messages = getRecentMessagesForNpcScan(historyDepth);
-            if (!messages || messages.length === 0) {
-                return '';
-            }
-
-            const scanKey = messages.map(m => {
-                const text = m.message || m.mes || '';
-                const id = m.message_id ?? m.id ?? '';
-                return `${id}:${text.length}`;
-            }).join('|');
-
-            if (!force &&
-                locationContextState.npcScanKey === scanKey &&
-                (Date.now() - locationContextState.npcScanAt) < CHAT_SCAN_CACHE_TTL_MS) {
-                return locationContextState.npcTriggerSection;
-            }
-
-            let npcTriggerSection = '';
-            try {
-                const textToScan = messages.map(m => {
-                    let text = m.message || m.mes || '';
-                    text = text.replace(/<VariableInsert>[\s\S]*?<\/VariableInsert>/gi, '');
-                    text = text.replace(/<VariableEdit>[\s\S]*?<\/VariableEdit>/gi, '');
-                    text = text.replace(/<VariableDelete>[\s\S]*?<\/VariableDelete>/gi, '');
-                    text = text.replace(/<planning>[\s\S]*?<\/planning>/gi, '');
-                    return text;
-                }).join('\n');
-
-                const triggeredNpcs = LocationContextBackend.scanForNpcTriggers(textToScan);
-                if (triggeredNpcs.length > 0) {
-                    const npcLocations = LocationContextBackend.getNpcLocationsByTriggers(triggeredNpcs);
-                    if (npcLocations.length > 0) {
-                        const npcLines = ['', '【剧情触发NPC地点】'];
-                        const groupedByNpc = {};
-
-                        for (const loc of npcLocations) {
-                            if (!groupedByNpc[loc.displayName]) {
-                                groupedByNpc[loc.displayName] = [];
-                            }
-                            groupedByNpc[loc.displayName].push(loc);
-                        }
-
-                        for (const [npcName, locations] of Object.entries(groupedByNpc)) {
-                            npcLines.push(`  ■ ${npcName}:`);
-                            for (const loc of locations) {
-                                const region = LocationContextBackend.getRegionByCoords(loc.displayX, loc.displayY);
-                                const regionInfo = LocationContextBackend.REGIONS[region];
-                                const regionShort = regionInfo?.short || '?';
-                                const placeName = loc.name || loc.id.replace(/_/g, ' ');
-                                npcLines.push(`    • ${placeName} [${loc.displayX}, ${loc.displayY}] (${regionShort}区)`);
-                            }
-                        }
-
-                        npcTriggerSection = npcLines.join('\n');
-                        console.log(`[PKM] 检测到 NPC 触发词: ${triggeredNpcs.join(', ')}`);
-                    }
-                }
-            } catch (e) {
-                console.warn('[PKM] NPC 触发词扫描失败:', e);
-            }
-
-            locationContextState.npcScanKey = scanKey;
-            locationContextState.npcTriggerSection = npcTriggerSection;
-            locationContextState.npcScanAt = Date.now();
-            return npcTriggerSection;
-        }
         
         // ========== 位置上下文注入函数 ==========
-        async function injectLocationContext(options = {}) {
-            const force = options.force === true;
-
-            if (!force && locationContextState.inFlightPromise) {
-                return locationContextState.inFlightPromise;
-            }
-
-            const task = (async () => {
+        async function injectLocationContext() {
             try {
                 // 确保数据已加载
                 await LocationContextBackend.loadData();
                 
-                const eraVars = await getEraVars({ force: options.forceEraFetch === true });
+                const eraVars = await getEraVars();
                 if (!eraVars) {
                     console.log('[PKM] 无 ERA 数据，跳过位置注入');
                     return;
@@ -2897,38 +2719,24 @@
                 // 注意：日期变化时的刷新（删除+插入）由 pkm:refreshPokemonSpawns 事件处理
                 const currentDay = eraVars?.world_state?.time?.day || 1;
                 lastGameDay = currentDay;
-                const hydrationWorldKey = `${location.x},${location.y}|${currentRegion}|${currentDay}`;
-
-                if (force || locationContextState.hydratedWorldKey !== hydrationWorldKey) {
-                    const newSpawns = await PokemonSpawnSystem.generateForNearbyGrids(
-                        location.x, 
-                        location.y, 
-                        eraVars
-                    );
-                    if (newSpawns && Object.keys(newSpawns).length > 0) {
-                        await eraInsertPokemonSpawns(newSpawns);
-                        if (!eraVars.world_state) eraVars.world_state = {};
-                        if (!eraVars.world_state.pokemon_spawns) eraVars.world_state.pokemon_spawns = {};
-                        Object.assign(eraVars.world_state.pokemon_spawns, newSpawns);
-                    }
-                    
-                    // ========== 天气系统：为周围13格生成天气（只增不改）==========
-                    const newWeatherGrid = await WeatherSystem.generateForNearbyGrids(
-                        location.x,
-                        location.y,
-                        eraVars
-                    );
-                    if (newWeatherGrid && Object.keys(newWeatherGrid).length > 0) {
-                        await eraInsertWeatherGrid(newWeatherGrid);
-                        if (!eraVars.world_state) eraVars.world_state = {};
-                        if (!eraVars.world_state.weather_grid) eraVars.world_state.weather_grid = {};
-                        Object.assign(eraVars.world_state.weather_grid, newWeatherGrid);
-                    }
-
-                    locationContextState.hydratedWorldKey = hydrationWorldKey;
-                    setEraVarsCache(eraVars);
-                } else {
-                    console.log('[PKM] [CTX] 位置与日期未变化，跳过周边 spawn/weather 补全');
+                
+                const newSpawns = await PokemonSpawnSystem.generateForNearbyGrids(
+                    location.x, 
+                    location.y, 
+                    eraVars
+                );
+                if (newSpawns && Object.keys(newSpawns).length > 0) {
+                    await eraInsertPokemonSpawns(newSpawns);
+                }
+                
+                // ========== 天气系统：为周围13格生成天气（只增不改）==========
+                const newWeatherGrid = await WeatherSystem.generateForNearbyGrids(
+                    location.x,
+                    location.y,
+                    eraVars
+                );
+                if (newWeatherGrid && Object.keys(newWeatherGrid).length > 0) {
+                    await eraInsertWeatherGrid(newWeatherGrid);
                 }
                 
                 // 获取当前格子和周围13格的天气
@@ -2968,22 +2776,7 @@
                     location.y, 
                     eraVars
                 );
-                const weatherSignature = buildWeatherSignature(currentWeatherConfig, nearbyWeathers);
-                const pokemonSignature = buildPokemonSignature(currentPokemon);
                 
-                const npcTriggerSection = getNpcTriggerSection(force);
-                const contextSignature = JSON.stringify({
-                    key: hydrationWorldKey,
-                    weather: weatherSignature,
-                    pokemon: pokemonSignature,
-                    npc: npcTriggerSection
-                });
-
-                if (!force && locationContextState.lastSignature === contextSignature && locationContextState.promptContent) {
-                    console.log('[PKM] [CTX] 上下文未变化，跳过重复注入');
-                    return;
-                }
-
                 // 生成完整的位置上下文文本
                 let contextText = LocationContextBackend.generateContextText(
                     location.x, 
@@ -2994,6 +2787,7 @@
                 if (currentWeatherConfig || nearbyWeathers.length > 0) {
                     const weatherLines = ['', '【天气状况】'];
                     
+                    // 脚下天气
                     if (currentWeatherConfig) {
                         let currentLine = `脚下: ${currentWeatherConfig.weather}`;
                         if (currentWeatherConfig.suppression?.suppressed?.length > 0) {
@@ -3002,6 +2796,7 @@
                         weatherLines.push(currentLine);
                     }
                     
+                    // 四周天气（按天气类型分组，减少冗余）
                     if (nearbyWeathers.length > 0) {
                         const weatherGroups = {};
                         for (const nw of nearbyWeathers) {
@@ -3018,6 +2813,7 @@
                         weatherLines.push(`四周: ${nearbyParts.join(', ')}`);
                     }
                     
+                    // 在【周围环境】之前插入
                     const insertPoint = contextText.indexOf('【周围环境】');
                     if (insertPoint > 0) {
                         const before = contextText.substring(0, insertPoint - 1);
@@ -3028,6 +2824,7 @@
                     }
                 }
                 
+                // 添加当前格子的宝可梦信息
                 if (currentPokemon && currentPokemon.length > 0) {
                     const pokemonLines = [
                         '',
@@ -3038,6 +2835,7 @@
                         const rarityStr = poke.rarity ? `(${poke.rarity})` : '';
                         pokemonLines.push(`  ${poke.id} ${levelStr} ${rarityStr}`);
                     }
+                    // 在【周围环境】之前插入
                     const insertPoint = contextText.indexOf('【周围环境】');
                     if (insertPoint > 0) {
                         const beforeEnv = contextText.substring(0, insertPoint - 1);
@@ -3046,6 +2844,70 @@
                     } else {
                         contextText += '\n' + pokemonLines.join('\n');
                     }
+                }
+                
+                // ========== 扫描聊天记录检测 NPC 触发词 ==========
+                let npcTriggerSection = '';
+                try {
+                    // 使用 getChatMessages 获取最近10条聊天记录（与 pkm-tavern-plugin.js 一致）
+                    const historyDepth = 10;
+                    const allMessages = typeof getChatMessages === 'function' 
+                        ? getChatMessages('0-{{lastMessageId}}') 
+                        : null;
+                    
+                    if (allMessages && allMessages.length > 0) {
+                        // 取最后 N 条
+                        const messages = allMessages.slice(-historyDepth);
+                        
+                        // 过滤掉 ERA 变量标签，避免匹配到 JSON 里的 NPC ID
+                        const textToScan = messages.map(m => {
+                            let text = m.message || m.mes || '';
+                            // 移除 <VariableInsert>、<VariableEdit>、<VariableDelete> 标签及其内容
+                            text = text.replace(/<VariableInsert>[\s\S]*?<\/VariableInsert>/gi, '');
+                            text = text.replace(/<VariableEdit>[\s\S]*?<\/VariableEdit>/gi, '');
+                            text = text.replace(/<VariableDelete>[\s\S]*?<\/VariableDelete>/gi, '');
+                            // 移除 <planning> 标签及其内容
+                            text = text.replace(/<planning>[\s\S]*?<\/planning>/gi, '');
+                            return text;
+                        }).join('\n');
+                        
+                        // 扫描触发词
+                        const triggeredNpcs = LocationContextBackend.scanForNpcTriggers(textToScan);
+                        
+                        if (triggeredNpcs.length > 0) {
+                            // 获取匹配的 NPC 位置
+                            const npcLocations = LocationContextBackend.getNpcLocationsByTriggers(triggeredNpcs);
+                            
+                            if (npcLocations.length > 0) {
+                                const npcLines = ['', '【剧情触发NPC地点】'];
+                                
+                                // 按 NPC 分组显示
+                                const groupedByNpc = {};
+                                for (const loc of npcLocations) {
+                                    if (!groupedByNpc[loc.displayName]) {
+                                        groupedByNpc[loc.displayName] = [];
+                                    }
+                                    groupedByNpc[loc.displayName].push(loc);
+                                }
+                                
+                                for (const [npcName, locations] of Object.entries(groupedByNpc)) {
+                                    npcLines.push(`  ■ ${npcName}:`);
+                                    for (const loc of locations) {
+                                        const region = LocationContextBackend.getRegionByCoords(loc.displayX, loc.displayY);
+                                        const regionInfo = LocationContextBackend.REGIONS[region];
+                                        const regionShort = regionInfo?.short || '?';
+                                        const placeName = loc.name || loc.id.replace(/_/g, ' ');
+                                        npcLines.push(`    • ${placeName} [${loc.displayX}, ${loc.displayY}] (${regionShort}区)`);
+                                    }
+                                }
+                                
+                                npcTriggerSection = npcLines.join('\n');
+                                console.log(`[PKM] 检测到 NPC 触发词: ${triggeredNpcs.join(', ')}`);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[PKM] NPC 触发词扫描失败:', e);
                 }
                 
                 // 将 NPC 触发区块添加到上下文末尾
@@ -3072,24 +2934,12 @@ ${contextText}
                         should_scan: false,
                         content: promptContent
                     }]);
-                    locationContextState.lastSignature = contextSignature;
-                    locationContextState.promptContent = promptContent;
                     console.log('[PKM] ✓ 位置上下文已注入:', location);
                 } else {
                     console.warn('[PKM] injectPrompts API 不可用');
                 }
             } catch (e) {
                 console.error('[PKM] 位置上下文注入失败:', e);
-            }
-            })();
-
-            locationContextState.inFlightPromise = task;
-            try {
-                return await task;
-            } finally {
-                if (locationContextState.inFlightPromise === task) {
-                    locationContextState.inFlightPromise = null;
-                }
             }
         }
         
@@ -3156,14 +3006,11 @@ ${contextText}
         });
         
         // ESC 关闭
-        function onDocumentKeydown(e) {
+        $(document).on('keydown', function(e) {
             if (e.key === 'Escape' && overlay.css('display') !== 'none') {
                 overlay.css('display', 'none');
             }
-        }
-
-        runtimeState.keydownHandler = onDocumentKeydown;
-        $(document).on('keydown', onDocumentKeydown);
+        });
         
         // ========== 刷新函数 ==========
         let refreshDashboardTimer = null;
@@ -3174,29 +3021,20 @@ ${contextText}
             }
             
             refreshDashboardTimer = setTimeout(async () => {
-                const canPostToVisibleIframe =
-                    visibleIframeLoaded &&
-                    overlay.css('display') !== 'none' &&
-                    iframe[0] &&
-                    iframe[0].contentWindow;
-                if (!canPostToVisibleIframe) {
-                    refreshDashboardTimer = null;
-                    return;
-                }
-
                 console.log('[PKM] 刷新面板数据...');
                 const eraData = await getEraVars();
-                if (!eraData) {
-                    refreshDashboardTimer = null;
-                    return;
-                }
+                if (!eraData) return;
                 
                 const message = { type: 'PKM_REFRESH', data: eraData };
                 
-                try {
-                    iframe[0].contentWindow.postMessage(message, '*');
-                    console.log('[PKM] ✓ 已发送刷新数据到显示 iframe');
-                } catch (e) {}
+                // 只发送到显示的 iframe（如果已加载且面板打开）
+                // 隐藏 iframe 不需要频繁刷新，只在初始化时同步
+                if (visibleIframeLoaded && iframe[0] && iframe[0].contentWindow) {
+                    try {
+                        iframe[0].contentWindow.postMessage(message, '*');
+                        console.log('[PKM] ✓ 已发送刷新数据到显示 iframe');
+                    } catch (e) {}
+                }
                 
                 refreshDashboardTimer = null;
             }, 150); // 150ms 防抖
@@ -3350,8 +3188,8 @@ ${contextText}
         let eraEventDebounceTimer = null;
         const ERA_EVENT_DEBOUNCE_MS = 500; // 500ms 防抖
         
-        function onEraWriteDone() {
-                invalidateEraVarsCache();
+        if (typeof eventOn !== 'undefined') {
+            eventOn('era:writeDone', () => {
                 // 如果正在处理中，跳过（防止死循环）
                 if (isProcessingEraEvent) {
                     console.log('[PKM] 跳过重复的 era:writeDone 事件（防抖中）');
@@ -3379,29 +3217,24 @@ ${contextText}
                         }, 200);
                     }
                 }, 100); // 100ms 后执行，合并快速连续的事件
-        }
-
-        function onGenerationEnded() {
-            console.log('[PKM] 检测到消息生成完成，刷新面板和位置注入');
-            invalidateEraVarsCache();
-            refreshDashboard();
-            injectLocationContext(); // 刷新位置上下文注入
-            // 检测 transfer_buffer 并处理
-            handleTransferBuffer();
-        }
-
-        function onChatChanged() {
-            console.log('[PKM] 检测到对话切换，重置面板');
-            iframeInitialized = false;
-            invalidateEraVarsCache();
-            locationContextState.lastSignature = null;
-            locationContextState.promptContent = null;
-            locationContextState.npcScanKey = null;
-            locationContextState.npcTriggerSection = '';
-            injectLocationContext({ force: true }); // 切换对话时也刷新位置注入
-        }
-
-        async function onRefreshPokemonSpawns(detail) {
+            });
+            
+            eventOn('generation_ended', () => {
+                console.log('[PKM] 检测到消息生成完成，刷新面板和位置注入');
+                refreshDashboard();
+                injectLocationContext(); // 刷新位置上下文注入
+                // 检测 transfer_buffer 并处理
+                handleTransferBuffer();
+            });
+            
+            eventOn('chat_changed', () => {
+                console.log('[PKM] 检测到对话切换，重置面板');
+                iframeInitialized = false;
+                injectLocationContext(); // 切换对话时也刷新位置注入
+            });
+            
+            // ========== 监听每日刷新事件（由 pkm-tavern-plugin.js 触发）==========
+            eventOn('pkm:refreshPokemonSpawns', async (detail) => {
                 console.log('[PKM] [REFRESH] 收到每日刷新事件:', detail);
                 try {
                     // 确保数据已加载
@@ -3446,33 +3279,16 @@ ${contextText}
                     
                     // 执行刷新（删除+插入：宝可梦+天气）
                     await eraRefreshPokemonAndWeather(newSpawns, newWeather);
-                    invalidateEraVarsCache();
-                    locationContextState.hydratedWorldKey = null;
-                    locationContextState.lastSignature = null;
                     
                     console.log('[PKM] [REFRESH] ✓ 每日刷新完成');
                 } catch (e) {
                     console.error('[PKM] [REFRESH] 每日刷新失败:', e);
                 }
-        }
-
-        runtimeState.onEraWriteDone = onEraWriteDone;
-        runtimeState.onGenerationEnded = onGenerationEnded;
-        runtimeState.onChatChanged = onChatChanged;
-        runtimeState.onRefreshPokemonSpawns = onRefreshPokemonSpawns;
-
-        if (typeof eventOn !== 'undefined') {
-            eventOn('era:writeDone', onEraWriteDone);
-            eventOn('generation_ended', onGenerationEnded);
-            eventOn('chat_changed', onChatChanged);
+            });
             
-            // ========== 监听每日刷新事件（由 pkm-tavern-plugin.js 触发）==========
-            eventOn('pkm:refreshPokemonSpawns', onRefreshPokemonSpawns);
-        }
-
-        // ========== 异变系统刷新逻辑 ==========
-        // 根据天数更新 phenomenon 状态，返回计算出的状态对象
-        async function updatePhenomenonByDay(day) {
+            // ========== 异变系统刷新逻辑 ==========
+            // 根据天数更新 phenomenon 状态，返回计算出的状态对象
+            async function updatePhenomenonByDay(day) {
                 const defaultState = { active_type: "clear", active_region: "none" };
                 
                 if (!day || day < 1) return defaultState;
@@ -3520,8 +3336,8 @@ ${contextText}
                 return { active_type: todaySchedule.type, active_region: activeRegion };
             }
             
-        // 设置异变状态（通过 VariableEdit 注入）
-        async function setPhenomenonState(activeType, activeRegion, forceUpdate = false) {
+            // 设置异变状态（通过 VariableEdit 注入）
+            async function setPhenomenonState(activeType, activeRegion, forceUpdate = false) {
                 try {
                     // 获取当前 ERA 变量
                     const eraVars = await getEraVars();
@@ -3592,6 +3408,7 @@ ${contextText}
                 } catch (e) {
                     console.error('[PKM] [PHENOMENON] 设置异变状态失败:', e);
                 }
+            }
         }
         
         // ========== 卸载清理函数（退出角色卡时调用）==========
@@ -3606,63 +3423,22 @@ ${contextText}
             // 清理事件监听
             if (typeof eventRemoveListener !== 'undefined') {
                 try {
-                    if (runtimeState.onEraWriteDone) eventRemoveListener('era:writeDone', runtimeState.onEraWriteDone);
-                    if (runtimeState.onGenerationEnded) eventRemoveListener('generation_ended', runtimeState.onGenerationEnded);
-                    if (runtimeState.onChatChanged) eventRemoveListener('chat_changed', runtimeState.onChatChanged);
-                    if (runtimeState.onRefreshPokemonSpawns) eventRemoveListener('pkm:refreshPokemonSpawns', runtimeState.onRefreshPokemonSpawns);
+                    eventRemoveListener('era:writeDone');
+                    eventRemoveListener('generation_ended');
+                    eventRemoveListener('chat_changed');
                 } catch (e) {
                     // 忽略清除失败
                 }
             }
-
-            if (refreshDashboardTimer) {
-                clearTimeout(refreshDashboardTimer);
-                refreshDashboardTimer = null;
-            }
-            if (eraEventDebounceTimer) {
-                clearTimeout(eraEventDebounceTimer);
-                eraEventDebounceTimer = null;
-            }
-            invalidateEraVarsCache();
-            locationContextState.hydratedWorldKey = null;
-            locationContextState.lastSignature = null;
-            locationContextState.promptContent = null;
-            locationContextState.npcScanKey = null;
-            locationContextState.npcTriggerSection = '';
-            locationContextState.npcScanAt = 0;
-            locationContextState.inFlightPromise = null;
-            isProcessingEraEvent = false;
-            transferBufferLock = false;
             
             // 清理全局变量
             delete window.pkmDashboard;
-            if (window.pkmSetLeader === handleLeaderToggle) delete window.pkmSetLeader;
-            if (window.pkmUpdateSettings === handleSettingsToggle) delete window.pkmUpdateSettings;
-            if (window.__pkmTavernInjectState === runtimeState) delete window.__pkmTavernInjectState;
             
             // 移除 pagehide 监听器
             window.removeEventListener('pagehide', unloadPkmUI);
-            if (runtimeState.keydownHandler) {
-                $(document).off('keydown', runtimeState.keydownHandler);
-            }
-            if (runtimeState.windowMessageHandler) {
-                window.removeEventListener('message', runtimeState.windowMessageHandler);
-            }
-            if (runtimeState.topWindowRef && runtimeState.topWindowMessageHandler) {
-                runtimeState.topWindowRef.removeEventListener('message', runtimeState.topWindowMessageHandler);
-            }
-            if (runtimeState.topWindowRef && runtimeState.topWindowRef.pkmSetLeader === handleLeaderToggle) {
-                delete runtimeState.topWindowRef.pkmSetLeader;
-            }
-            if (runtimeState.topWindowRef && runtimeState.topWindowRef.pkmUpdateSettings === handleSettingsToggle) {
-                delete runtimeState.topWindowRef.pkmUpdateSettings;
-            }
             
             console.log('[PKM] UI 脚本卸载完成');
         }
-
-        runtimeState.teardown = unloadPkmUI;
-        runtimeState.pagehideHandler = unloadPkmUI;
         
         // 监听 pagehide 事件（退出角色卡时触发）
         window.removeEventListener('pagehide', unloadPkmUI);
@@ -3670,7 +3446,7 @@ ${contextText}
         
         // ========== 监听 iframe 的 postMessage 请求 ==========
         console.log('[PKM] ✓ 注册 postMessage 监听器');
-        function onWindowMessage(event) {
+        window.addEventListener('message', function(event) {
             // 调试：打印所有 PKM 相关消息
             if (event.data && event.data.type) {
                 const type = event.data.type;
@@ -3747,10 +3523,7 @@ ${contextText}
             if (event.data.type === 'PKM_MAP_FULLSCREEN') {
                 handleMapFullscreen(event.data.fullscreen);
             }
-        }
-
-        runtimeState.windowMessageHandler = onWindowMessage;
-        window.addEventListener('message', onWindowMessage);
+        });
         
         // ========== MAP 全屏处理 ==========
         let isMapFullscreen = false; // 记录当前全屏状态
@@ -3984,11 +3757,10 @@ ${contextText}
             if (topWin && topWin !== window) {
                 topWin.pkmSetLeader = handleLeaderToggle;
                 topWin.pkmUpdateSettings = handleSettingsToggle;
-                runtimeState.topWindowRef = topWin;
                 console.log('[PKM] ✓ 已在酒馆主窗口设置 pkmSetLeader 和 pkmUpdateSettings');
                 
                 // 在酒馆主窗口注册 postMessage 监听器
-                function onTopWindowMessage(event) {
+                topWin.addEventListener('message', function(event) {
                     if (!event.data || !event.data.type) return;
                     
                     if (event.data.type === 'PKM_SET_LEADER') {
@@ -4008,10 +3780,7 @@ ${contextText}
                         console.log('[PKM] 收到 MAP 全屏请求 (top listener):', isFullscreen);
                         handleMapFullscreen(isFullscreen);
                     }
-                }
-
-                runtimeState.topWindowMessageHandler = onTopWindowMessage;
-                topWin.addEventListener('message', onTopWindowMessage);
+                });
                 console.log('[PKM] ✓ 已在酒馆主窗口注册 postMessage 监听器');
             }
         } catch (e) {
