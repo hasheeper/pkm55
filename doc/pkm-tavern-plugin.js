@@ -6215,7 +6215,21 @@ if (typeof window !== 'undefined') {
     eventEmitWrapped: false,
     originalEventEmit: null,
     wrappedEventEmit: null,
-    apiReadyTimer: null
+    apiReadyTimer: null,
+    eraVarsCache: {
+      value: null,
+      fetchedAt: 0,
+      promise: null
+    },
+    promptCache: {},
+    messageSliceCache: {
+      key: null,
+      messages: null,
+      scanText: null,
+      scanTextLower: null
+    },
+    lastBattleAttemptKey: null,
+    lastBattleAttemptStatus: null
   };
   window[PLUGIN_STATE_KEY] = pluginState;
   
@@ -6239,8 +6253,26 @@ if (typeof window !== 'undefined') {
   /**
    * 从ERA获取变量
    */
-  async function getEraVars() {
-    return new Promise((resolve, reject) => {
+  function invalidateEraVarsCache() {
+    pluginState.eraVarsCache.value = null;
+    pluginState.eraVarsCache.fetchedAt = 0;
+    pluginState.eraVarsCache.promise = null;
+  }
+
+  async function getEraVars(options = {}) {
+    const force = options.force === true;
+    const maxAgeMs = options.maxAgeMs ?? 250;
+    const { eraVarsCache } = pluginState;
+
+    if (!force && eraVarsCache.value && (Date.now() - eraVarsCache.fetchedAt) < maxAgeMs) {
+      return eraVarsCache.value;
+    }
+
+    if (!force && eraVarsCache.promise) {
+      return eraVarsCache.promise;
+    }
+
+    const queryPromise = new Promise((resolve) => {
       const timeout = setTimeout(() => {
         console.warn(`${PLUGIN_NAME} ERA 查询超时`);
         resolve(null);
@@ -6255,6 +6287,91 @@ if (typeof window !== 'undefined') {
 
       eventEmit('era:getCurrentVars');
     });
+
+    eraVarsCache.promise = queryPromise;
+    const result = await queryPromise;
+    eraVarsCache.promise = null;
+    if (result) {
+      eraVarsCache.value = result;
+      eraVarsCache.fetchedAt = Date.now();
+    }
+    return result;
+  }
+
+  function clearInjectedPrompt(id) {
+    try {
+      uninjectPrompts([id]);
+    } catch (e) {
+      // 忽略
+    }
+    delete pluginState.promptCache[id];
+  }
+
+  function injectPromptIfChanged(id, config, promptContent, logLabel) {
+    if (!promptContent) {
+      clearInjectedPrompt(id);
+      return false;
+    }
+
+    if (pluginState.promptCache[id] === promptContent) {
+      console.log(`${PLUGIN_NAME} ${logLabel} 未变化，跳过重复注入`);
+      return false;
+    }
+
+    injectPrompts([{
+      id,
+      ...config,
+      content: promptContent
+    }]);
+    pluginState.promptCache[id] = promptContent;
+    return true;
+  }
+
+  function getRecentChatMessages(historyDepth = 10) {
+    if (typeof getChatMessages !== 'function' || typeof getLastMessageId !== 'function') {
+      return [];
+    }
+
+    const lastMessageId = Number(getLastMessageId());
+    if (!Number.isFinite(lastMessageId) || lastMessageId < 0) {
+      return [];
+    }
+
+    const startMessageId = Math.max(0, lastMessageId - historyDepth + 1);
+    const cacheKey = `${startMessageId}-${lastMessageId}`;
+    if (pluginState.messageSliceCache.key === cacheKey && pluginState.messageSliceCache.messages) {
+      return pluginState.messageSliceCache.messages;
+    }
+
+    const messages = getChatMessages(cacheKey) || [];
+    pluginState.messageSliceCache = {
+      key: cacheKey,
+      messages,
+      scanText: null,
+      scanTextLower: null
+    };
+    return messages;
+  }
+
+  function getRecentScannableText(historyDepth = 10, toLowerCase = false) {
+    getRecentChatMessages(historyDepth);
+    const cache = pluginState.messageSliceCache;
+
+    if (toLowerCase && cache.scanTextLower !== null) return cache.scanTextLower;
+    if (!toLowerCase && cache.scanText !== null) return cache.scanText;
+
+    const rawText = (cache.messages || []).map(m => {
+      let text = m.message || m.mes || '';
+      text = text.replace(/<VariableInsert>[\s\S]*?<\/VariableInsert>/gi, '');
+      text = text.replace(/<VariableEdit>[\s\S]*?<\/VariableEdit>/gi, '');
+      text = text.replace(/<VariableDelete>[\s\S]*?<\/VariableDelete>/gi, '');
+      text = text.replace(/<planning>[\s\S]*?<\/planning>/gi, '');
+      return text;
+    }).join('\n');
+
+    cache.scanText = rawText;
+    cache.scanTextLower = rawText.toLowerCase();
+    return toLowerCase ? cache.scanTextLower : cache.scanText;
   }
 
   /**
@@ -6342,6 +6459,7 @@ if (typeof window !== 'undefined') {
    */
   async function updateEraVars(data) {
     return new Promise(async (resolve) => {
+      invalidateEraVarsCache();
       // 获取当前 ERA 变量用于智能判断
       const currentVars = await getEraVars();
       
@@ -6389,6 +6507,7 @@ if (typeof window !== 'undefined') {
       
       // 使用 era:updateByObject 更新
       eventEmit('era:updateByObject', nestedData);
+      invalidateEraVarsCache();
       
       // 短暂延迟后 resolve
       setTimeout(() => {
@@ -6402,6 +6521,7 @@ if (typeof window !== 'undefined') {
    * 插入ERA变量（新增）
    */
   function insertEraVars(data) {
+    invalidateEraVarsCache();
     eventEmit('era:insertByObject', data);
   }
 
@@ -8801,6 +8921,16 @@ if (typeof window !== 'undefined') {
     console.log(`${PLUGIN_NAME} ${reason} -> 重置状态`);
     lastHandledMk = null;
     isProcessing = false;
+    invalidateEraVarsCache();
+    pluginState.messageSliceCache = {
+      key: null,
+      messages: null,
+      scanText: null,
+      scanTextLower: null
+    };
+    pluginState.promptCache = {};
+    pluginState.lastBattleAttemptKey = null;
+    pluginState.lastBattleAttemptStatus = null;
   }
 
   /**
@@ -9142,13 +9272,6 @@ ${inventorySection}${boxSection}
     const isDryRun = Boolean(detail && detail.dryRun);
     
     try {
-      // 清除旧注入
-      try {
-        uninjectPrompts([PKM_INJECT_ID]);
-      } catch (e) {
-        // 忽略
-      }
-
       // 获取玩家数据
       const playerData = await getPlayerParty();
       console.log(`${PLUGIN_NAME} [DEBUG] 原始 playerData:`, JSON.stringify(playerData, null, 2));
@@ -9315,6 +9438,7 @@ ${inventorySection}${boxSection}
       
       if (!playerData || parsedParty.length === 0) {
         console.log(`${PLUGIN_NAME} 玩家队伍为空，跳过注入`);
+        clearInjectedPrompt(PKM_INJECT_ID);
         return;
       }
 
@@ -9364,19 +9488,22 @@ ${inventorySection}${boxSection}
       // 生成注入内容（使用显示用的数据）
       const displayPlayerData = { ...playerData, party: displayParty };
       const promptContent = generatePlayerDataPrompt(displayPlayerData);
-      if (!promptContent) return;
+      if (!promptContent) {
+        clearInjectedPrompt(PKM_INJECT_ID);
+        return;
+      }
 
       // 注入到上下文
-      injectPrompts([{
-        id: PKM_INJECT_ID,
+      const didInject = injectPromptIfChanged(PKM_INJECT_ID, {
         position: 'in_chat',
         depth: 2,
         role: 'system',
-        should_scan: false,
-        content: promptContent
-      }]);
+        should_scan: false
+      }, promptContent, '[队伍]');
 
-      console.log(`${PLUGIN_NAME} ✓ 玩家队伍数据已注入到上下文`);
+      if (didInject) {
+        console.log(`${PLUGIN_NAME} ✓ 玩家队伍数据已注入到上下文`);
+      }
 
     } catch (e) {
       console.error(`${PLUGIN_NAME} 注入失败:`, e);
@@ -9406,6 +9533,13 @@ ${inventorySection}${boxSection}
 
       const msg = messages[0];
       const content = msg.message || '';
+      const battleAttemptKey = [
+        messageId,
+        content.length,
+        content.indexOf(`<${PKM_BATTLE_TAG}>`),
+        content.indexOf(`</${PKM_BATTLE_TAG}>`),
+        content.includes('<PKM_FRONTEND>') ? 1 : 0
+      ].join(':');
 
       // 检查是否包含战斗标签
       if (!content.includes(`<${PKM_BATTLE_TAG}>`)) {
@@ -9416,15 +9550,26 @@ ${inventorySection}${boxSection}
       // 检查是否已经处理过（已有 PKM_FRONTEND）
       if (content.includes('<PKM_FRONTEND>')) {
         console.log(`${PLUGIN_NAME} 已处理过，跳过`);
+        pluginState.lastBattleAttemptKey = battleAttemptKey;
+        pluginState.lastBattleAttemptStatus = 'processed';
+        isProcessing = false;
+        return;
+      }
+
+      if (pluginState.lastBattleAttemptKey === battleAttemptKey) {
+        console.log(`${PLUGIN_NAME} 同一条战斗消息已尝试处理过（${pluginState.lastBattleAttemptStatus || 'unknown'}），跳过`);
         isProcessing = false;
         return;
       }
 
       console.log(`${PLUGIN_NAME} 检测到战斗标签，开始处理...`);
+      pluginState.lastBattleAttemptKey = battleAttemptKey;
+      pluginState.lastBattleAttemptStatus = 'attempting';
 
       // 解析AI输出
       const aiBattleData = parseAiBattleOutput(content);
       if (!aiBattleData) {
+        pluginState.lastBattleAttemptStatus = 'parse_failed';
         console.warn(`${PLUGIN_NAME} 无法解析战斗数据`);
         isProcessing = false;
         return;
@@ -9435,9 +9580,11 @@ ${inventorySection}${boxSection}
 
       // 注入前端
       await injectBattleFrontend(messageId, completeBattle);
+      pluginState.lastBattleAttemptStatus = 'processed';
 
       isProcessing = false;
     } catch (e) {
+      pluginState.lastBattleAttemptStatus = 'error';
       console.error(`${PLUGIN_NAME} 处理消息失败:`, e);
       isProcessing = false;
     }
@@ -9607,25 +9754,16 @@ ${inventorySection}${boxSection}
     try {
       // 1. 获取最近消息（扫描最近 10 条）
       const historyDepth = 10;
-      const allMessages = getChatMessages('0-{{lastMessageId}}');
+      const messages = getRecentChatMessages(historyDepth);
       
-      if (!allMessages || allMessages.length === 0) {
+      if (!messages || messages.length === 0) {
         console.log(`${PLUGIN_NAME} [NPC] 无消息可扫描`);
+        clearInjectedPrompt(NPC_INJECT_ID);
         return;
       }
-      
-      // 取最后 N 条
-      const messages = allMessages.slice(-historyDepth);
-      
+
       // 过滤掉 ERA 变量标签，避免匹配到 JSON 里的 NPC ID
-      const contextText = messages.map(m => {
-        let text = m.message || '';
-        // 移除 <VariableInsert>、<VariableEdit>、<VariableDelete> 标签及其内容
-        text = text.replace(/<VariableInsert>[\s\S]*?<\/VariableInsert>/gi, '');
-        text = text.replace(/<VariableEdit>[\s\S]*?<\/VariableEdit>/gi, '');
-        text = text.replace(/<VariableDelete>[\s\S]*?<\/VariableDelete>/gi, '');
-        return text;
-      }).join('\n').toLowerCase();
+      const contextText = getRecentScannableText(historyDepth, true);
       
       // 2. 获取 NPC 状态（优先使用快照，因为 processNpcLoveUp 可能刚更新）
       const eraVars = await getEraVars();
@@ -9683,16 +9821,16 @@ ${sections.join('\n\n')}
 </npc_status_brief>`;
       
       // 6. 注入到世界书上下文
-      injectPrompts([{
-        id: NPC_INJECT_ID,
+      const didInject = injectPromptIfChanged(NPC_INJECT_ID, {
         position: 'after_wi_scan',
         depth: 0,
         role: 'system',
-        should_scan: false,
-        content: promptContent
-      }]);
+        should_scan: false
+      }, promptContent, '[NPC]');
       
-      console.log(`${PLUGIN_NAME} [NPC] ✓ 已注入 ${activeNpcs.length} 个活跃主要 NPC 状态`);
+      if (didInject) {
+        console.log(`${PLUGIN_NAME} [NPC] ✓ 已注入 ${activeNpcs.length} 个活跃主要 NPC 状态`);
+      }
       
     } catch (e) {
       console.error(`${PLUGIN_NAME} [NPC] 注入失败:`, e);
@@ -10070,16 +10208,16 @@ ${timeCard}
 </pkm_time_status>`;
       
       // 注入
-      injectPrompts([{
-        id: TIME_INJECT_ID,
+      const didInject = injectPromptIfChanged(TIME_INJECT_ID, {
         position: 'after_wi_scan',
         depth: 2,
         role: 'system',
-        should_scan: false,
-        content: promptContent
-      }]);
+        should_scan: false
+      }, promptContent, '[TIME]');
       
-      console.log(`${PLUGIN_NAME} [TIME] ✓ 已注入时间状态: DAY ${timeState.day || 1} · ${periodInfo.label}`);
+      if (didInject) {
+        console.log(`${PLUGIN_NAME} [TIME] ✓ 已注入时间状态: DAY ${timeState.day || 1} · ${periodInfo.label}`);
+      }
       
     } catch (e) {
       console.error(`${PLUGIN_NAME} [TIME] 注入失败:`, e);
@@ -10093,6 +10231,7 @@ ${timeCard}
   async function processNpcLoveUp() {
     const eraVars = await getEraVars();
     const npcsState = getEraValue(eraVars, 'world_state.npcs', {});
+    const playerBonds = getEraValue(eraVars, 'player.bonds', {});
     
     if (_.isEmpty(npcsState)) return;
     
@@ -10161,8 +10300,6 @@ ${timeCard}
         
         if (nextThreshold !== null && effectiveLove >= nextThreshold) {
           // 检查玩家是否已获得该女主角的羁绊道具（bonds，而非普通 unlocks）
-          const eraVars = await getEraVars();
-          const playerBonds = getEraValue(eraVars, 'player.bonds', {});
           const hasBond = playerBonds[addon.unlock_key] === true;
           
           if (!hasBond) {
@@ -10381,6 +10518,16 @@ ${unlockItem.effect}
 
     isProcessing = false;
     lastHandledMk = null;
+    invalidateEraVarsCache();
+    pluginState.promptCache = {};
+    pluginState.messageSliceCache = {
+      key: null,
+      messages: null,
+      scanText: null,
+      scanTextLower: null
+    };
+    pluginState.lastBattleAttemptKey = null;
+    pluginState.lastBattleAttemptStatus = null;
   }
 
   pluginState.destroy = destroyPlugin;
@@ -10679,12 +10826,16 @@ ${unlockItem.effect}
     const wrappedEventEmit = function(eventName, data) {
       if (eventName === 'era:updateByObject' && data) {
         console.log(`${PLUGIN_NAME} [拦截] 检测到 ERA 变量更新事件`);
+        invalidateEraVarsCache();
         
         // 异步预处理（需要读取当前 ERA 变量）
         preprocessEraUpdate(data).then(processedData => {
           pluginState.originalEventEmit.call(window, eventName, processedData);
         });
       } else {
+        if (eventName === 'era:insertByObject' || eventName === 'era:deleteByObject') {
+          invalidateEraVarsCache();
+        }
         // 其他事件直接透传
         pluginState.originalEventEmit.apply(window, arguments);
       }
